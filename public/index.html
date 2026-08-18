@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proxmox VE Enterprise Management Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Navigation Header -->
+        <header class="navbar">
+            <div class="brand">
+                <div class="logo-icon">
+                    <i data-lucide="server" class="brand-svg"></i>
+                </div>
+                <div class="brand-text">
+                    <h1>Proxmox Cluster Explorer</h1>
+                    <span class="badge">IaC & Operations</span>
+                </div>
+            </div>
+
+            <!-- Tabs Navigation -->
+            <div class="nav-tabs">
+                <button class="nav-tab active" data-tab="tab-overview">
+                    <i data-lucide="activity" class="btn-icon-sm"></i>
+                    <span>Tài Nguyên Cụm (Cluster)</span>
+                </button>
+                <button class="nav-tab" data-tab="tab-deploy">
+                    <i data-lucide="plus-circle" class="btn-icon-sm"></i>
+                    <span>Khởi Tạo VM</span>
+                </button>
+                <button class="nav-tab" data-tab="tab-logs">
+                    <i data-lucide="terminal" class="btn-icon-sm"></i>
+                    <span>Nhật Ký (Logs)</span>
+                </button>
+            </div>
+
+            <div class="header-status">
+                <span class="status-dot online"></span>
+                <span>Proxmox VE API Connected</span>
+            </div>
+        </header>
+
+        <!-- TAB 1: CLUSTER OVERVIEW (Nodes, Storages, Images, VMs) -->
+        <section id="tab-overview" class="tab-content active">
+            <div class="section-top-actions">
+                <div class="section-title">
+                    <h2>Tổng Quan Tài Nguyên Hạ Tầng</h2>
+                    <p>Theo dõi thời gian thực về Node IP, Local & LVM & ZFS Storage, ISO Images và danh sách toàn bộ VM</p>
+                </div>
+                <button id="btnRefreshResources" class="btn-secondary">
+                    <i data-lucide="refresh-cw" class="btn-icon-sm"></i>
+                    <span>Cập Nhật Dữ Liệu</span>
+                </button>
+            </div>
+
+            <!-- Container rendered dynamically by JS -->
+            <div id="clusterContainer" class="cluster-grid">
+                <div class="card text-center text-muted">
+                    <span class="spinner" style="margin: 20px auto; display:block;"></span>
+                    Đang kết nối và quét tài nguyên cụm Proxmox...
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: VM DEPLOYMENT & STACKS -->
+        <section id="tab-deploy" class="tab-content">
+            <main class="main-grid">
+                <!-- Form Khởi Tạo VM -->
+                <section class="card form-card">
+                    <div class="card-header">
+                        <div class="card-title-group">
+                            <i data-lucide="plus-circle" class="icon-accent"></i>
+                            <h2>Khởi Tạo Máy Ảo Mới</h2>
+                        </div>
+                        <p>Cấu hình tài nguyên và tự động provision qua Pulumi Engine</p>
+                    </div>
+
+                    <form id="createVmForm">
+                        <div class="form-row">
+                            <div class="form-group flex-2">
+                                <label for="vmName">
+                                    <i data-lucide="tag" class="field-icon"></i>
+                                    Tên Máy Ảo / Tiền Tố Cụm (VM Base Name)
+                                </label>
+                                <input type="text" id="vmName" name="name" placeholder="vd: postgresql hoặc k8s-worker" required value="postgresql">
+                            </div>
+                            <div class="form-group flex-1">
+                                <div class="label-with-value">
+                                    <label for="vmCount">
+                                        <i data-lucide="copy-plus" class="field-icon"></i>
+                                        Số Lượng (Cluster)
+                                    </label>
+                                    <span class="value-badge" id="vmCountVal">1 VM</span>
+                                </div>
+                                <input type="range" id="vmCount" name="vmCount" min="1" max="10" value="1" step="1">
+                            </div>
+                        </div>
+
+                        <!-- Environment Selector (DEV, STAG, PRO) -->
+                        <div class="form-group">
+                            <label>
+                                <i data-lucide="shield-check" class="field-icon"></i>
+                                Môi Trường Triển Khai (Environment)
+                            </label>
+                            <div class="env-selector-grid">
+                                <label class="env-radio-card env-card-dev active">
+                                    <input type="radio" name="environment" value="dev" checked>
+                                    <span class="env-indicator-dot dev"></span>
+                                    <span>DEV (Phát Triển)</span>
+                                </label>
+                                <label class="env-radio-card env-card-stag">
+                                    <input type="radio" name="environment" value="stag">
+                                    <span class="env-indicator-dot stag"></span>
+                                    <span>STAGING (Kiểm Thử)</span>
+                                </label>
+                                <label class="env-radio-card env-card-pro">
+                                    <input type="radio" name="environment" value="pro">
+                                    <span class="env-indicator-dot pro"></span>
+                                    <span>PROD (Production)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Row: Custom Tags & CPU Architecture -->
+                        <div class="form-row">
+                            <div class="form-group flex-1">
+                                <label for="customTags">
+                                    <i data-lucide="tags" class="field-icon"></i>
+                                    Tags Phân Loại (Cách nhau bằng dấu phẩy)
+                                </label>
+                                <input type="text" id="customTags" name="tags" placeholder="vd: database, postgresql, backend">
+                            </div>
+                            <div class="form-group flex-1">
+                                <label for="cpuType">
+                                    <i data-lucide="cpu" class="field-icon"></i>
+                                    Kiến Trúc CPU (CPU Model)
+                                </label>
+                                <select id="cpuType" name="cpuType">
+                                    <option value="host" selected>Host Passthrough (Tối ưu phần cứng - Khuyên dùng)</option>
+                                    <option value="x86-64-v2-AES">x86-64-v2-AES (Tương thích CPU hỗn hợp)</option>
+                                    <option value="x86-64-v3">x86-64-v3 (Modern CPU - Hỗ trợ AVX2)</option>
+                                    <option value="kvm64">KVM64 (Ảo hóa phổ quát)</option>
+                                    <option value="qemu64">QEMU64 (Mặc định)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Single Node Selection Row (chỉ hiển thị khi tạo 1 VM) -->
+                        <div id="singleNodeSection">
+                            <div class="form-row">
+                                <div class="form-group flex-1">
+                                    <label for="nodeName">
+                                        <i data-lucide="hard-drive" class="field-icon"></i>
+                                        Proxmox Node
+                                    </label>
+                                    <select id="nodeName" name="nodeName">
+                                        <option value="" disabled selected>Đang tải danh sách Node từ API...</option>
+                                    </select>
+                                    <div id="nodeInfoChip" style="margin-top: 6px;"></div>
+                                </div>
+                                <div class="form-group flex-1">
+                                    <label for="datastoreId">
+                                        <i data-lucide="database" class="field-icon"></i>
+                                        Ổ Lưu Trữ (Storage / Datastore)
+                                    </label>
+                                    <select id="datastoreId" name="datastoreId" required>
+                                        <option value="" disabled selected>Chọn Node trước...</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <!-- Live Node Resource Breakdown Card -->
+                            <div id="nodeResourceCard" class="node-resource-card" style="display:none; margin-bottom: 16px;"></div>
+                        </div>
+
+                        <!-- Multi-Node Distribution Section (tự động bật khi tạo > 1 VM) -->
+                        <div id="multiNodeSection" class="form-group hidden">
+                            <div class="label-with-value">
+                                <label>
+                                    <i data-lucide="network" class="field-icon"></i>
+                                    Chọn Các Node Để Phân Bổ (Distribution Nodes)
+                                </label>
+                                <span class="text-muted" style="font-size:11.5px;">(Tự động rải đều theo Round-Robin)</span>
+                            </div>
+                            <div class="node-filter-tabs">
+                                <button type="button" class="node-filter-btn active" data-filter="all">Tất Cả</button>
+                            </div>
+                            <div id="nodesCheckboxContainer" class="nodes-checkbox-grid">
+                                <!-- Rendered dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Live Cluster Preview Box -->
+                        <div id="vmClusterPreview" class="cluster-preview-box hidden">
+                            <div class="preview-header">
+                                <i data-lucide="layers" class="icon-accent-sm"></i>
+                                <span id="previewHeaderTitle">Xem trước danh sách phân bổ máy ảo:</span>
+                            </div>
+                            <div id="previewList" class="preview-items-list">
+                                <!-- Rendered dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- OS Image Selector -->
+                        <div class="form-group">
+                            <label for="diskImageId">
+                                <i data-lucide="disc" class="field-icon"></i>
+                                Image Hệ Điều Hành (Cloud-Init / ISO)
+                            </label>
+                            <select id="diskImageId" name="diskImageId" required>
+                                <option value="" disabled selected>Chọn Node trước...</option>
+                            </select>
+                        </div>
+
+                        <!-- Network & VLAN Settings -->
+                        <div class="form-row">
+                            <div class="form-group flex-1">
+                                <label for="bridge">
+                                    <i data-lucide="network" class="field-icon"></i>
+                                    Network Bridge
+                                </label>
+                                <select id="bridge" name="bridge">
+                                    <option value="vmbr0">vmbr0 (Mặc định)</option>
+                                </select>
+                            </div>
+                            <div class="form-group flex-1">
+                                <div class="label-with-value">
+                                    <label for="vlanTag">
+                                        <i data-lucide="split" class="field-icon"></i>
+                                        VLAN Tag
+                                    </label>
+                                    <span class="value-badge" id="vlanTagVal">Untagged</span>
+                                </div>
+                                <input type="number" id="vlanTag" name="vlanTag" min="1" max="4094" placeholder="vd: 10, 20... (Mặc định: Untagged)">
+                            </div>
+                        </div>
+
+                        <!-- Slider: CPU Cores -->
+                        <div class="form-group">
+                            <div class="label-with-value">
+                                <label for="cores">
+                                    <i data-lucide="cpu" class="field-icon"></i>
+                                    Số vCPU (Cores)
+                                </label>
+                                <span class="value-badge" id="coresVal">2 Cores</span>
+                            </div>
+                            <input type="range" id="cores" name="cores" min="1" max="16" value="2" step="1">
+                        </div>
+
+                        <!-- Slider: Memory RAM -->
+                        <div class="form-group">
+                            <div class="label-with-value">
+                                <label for="memoryGb">
+                                    <i data-lucide="memory-stick" class="field-icon"></i>
+                                    Dung Lượng RAM (GB)
+                                </label>
+                                <span class="value-badge" id="memoryVal">2 GB</span>
+                            </div>
+                            <input type="range" id="memoryGb" name="memoryGb" min="1" max="32" value="2" step="1">
+                        </div>
+
+                        <!-- Slider: Disk Size -->
+                        <div class="form-group">
+                            <div class="label-with-value">
+                                <label for="diskSizeGb">
+                                    <i data-lucide="database" class="field-icon"></i>
+                                    Ổ Đĩa OS (GB)
+                                </label>
+                                <span class="value-badge" id="diskSizeVal">20 GB</span>
+                            </div>
+                            <input type="range" id="diskSizeGb" name="diskSizeGb" min="10" max="200" value="20" step="5">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="sshPublicKey">
+                                <i data-lucide="key" class="field-icon"></i>
+                                SSH Public Key (Root Access)
+                            </label>
+                            <textarea id="sshPublicKey" name="sshPublicKey" rows="2" placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5..."></textarea>
+                        </div>
+
+                        <div class="form-options">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="upgrade" name="upgrade" checked>
+                                <span>Tự động cập nhật gói hệ thống (Cloud-Init Package Upgrade)</span>
+                            </label>
+                            <label class="checkbox-label" style="margin-top: 8px;">
+                                <input type="checkbox" id="protection" name="protection">
+                                <span>Bật chế độ bảo vệ chống xóa (VM Protection Mode)</span>
+                            </label>
+                        </div>
+
+                        <button type="submit" id="btnSubmit" class="btn-primary">
+                            <span class="spinner hidden"></span>
+                            <span class="btn-text">Triển Khai VM</span>
+                        </button>
+                    </form>
+                </section>
+
+                <!-- CỘT PHẢI: BẢNG STACKS PULUMI ĐÃ TẠO -->
+                <div class="col-right">
+                    <section class="card vm-list-card">
+                        <div class="card-header flex-between">
+                            <div>
+                                <div class="card-title-group">
+                                    <i data-lucide="layers" class="icon-accent"></i>
+                                    <h2>Máy Ảo Quản Lý Bởi Pulumi</h2>
+                                </div>
+                                <p>Các Stack độc lập được đồng bộ với Proxmox</p>
+                            </div>
+                            <button id="btnRefresh" class="btn-secondary" title="Làm mới danh sách">
+                                <i data-lucide="refresh-cw" class="btn-icon-sm"></i>
+                                <span>Làm Mới</span>
+                            </button>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="vm-table">
+                                <thead>
+                                    <tr>
+                                        <th>Tên VM / Stack</th>
+                                        <th>Môi Trường</th>
+                                        <th>Node</th>
+                                        <th>VM ID</th>
+                                        <th>Địa Chỉ IP</th>
+                                        <th>Trạng Thái</th>
+                                        <th class="text-right">Thao Tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="vmTableBody">
+                                    <tr>
+                                        <td colspan="7" class="text-center text-muted">Đang tải danh sách máy ảo...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+            </main>
+        </section>
+
+        <!-- TAB 3: REALTIME LOGS -->
+        <section id="tab-logs" class="tab-content">
+            <section class="card log-card-full">
+                <div class="card-header flex-between">
+                    <div>
+                        <div class="card-title-group">
+                            <i data-lucide="terminal" class="icon-accent"></i>
+                            <h2>Nhật Ký Triển Khai Pulumi Automation</h2>
+                        </div>
+                        <p>Luồng output trực tiếp từ tiến trình Engine theo thời gian thực (SSE)</p>
+                    </div>
+                    <button id="btnClearLogs" class="btn-text-only">
+                        <i data-lucide="trash-2" class="btn-icon-sm"></i>
+                        <span>Xóa log</span>
+                    </button>
+                </div>
+                <div class="terminal-container full-height" id="terminal">
+                    <div class="terminal-line text-info">[System] Ready to stream deployment logs...</div>
+                </div>
+            </section>
+        </section>
+    </div>
+
+    <!-- Modal Chi Tiết VM -->
+    <div id="vmModal" class="modal-backdrop hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="card-title-group">
+                    <i data-lucide="info" class="icon-accent"></i>
+                    <h3 id="modalVmTitle">Chi Tiết Máy Ảo</h3>
+                </div>
+                <button id="btnCloseModal" class="btn-icon-close">
+                    <i data-lucide="x" class="btn-icon-sm"></i>
+                </button>
+            </div>
+            <div id="modalVmBody" class="modal-body">
+                <!-- Rendered dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js?v=20260818-7"></script>
+</body>
+</html>
