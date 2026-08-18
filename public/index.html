@@ -112,7 +112,7 @@
                                     <i data-lucide="tag" class="field-icon"></i>
                                     Tên Máy Ảo / Tiền Tố Cụm (VM Base Name)
                                 </label>
-                                <input type="text" id="vmName" name="name" placeholder="vd: postgresql hoặc k8s-worker" required value="postgresql">
+                                <input type="text" id="vmName" name="name" placeholder="vd: ubuntu-server, db-master, k8s-node..." required>
                             </div>
                             <div class="form-group flex-1">
                                 <div class="label-with-value">
@@ -264,40 +264,49 @@
                             </div>
                         </div>
 
-                        <!-- Slider: CPU Cores -->
-                        <div class="form-group">
-                            <div class="label-with-value">
-                                <label for="cores">
-                                    <i data-lucide="cpu" class="field-icon"></i>
-                                    Số vCPU (Cores)
-                                </label>
-                                <span class="value-badge" id="coresVal">2 Cores</span>
+                        <!-- Hardware Specs: vCPU, RAM, Disk Size (Input số trực tiếp & đồng bộ thanh trượt) -->
+                        <div class="form-row">
+                            <div class="form-group flex-1">
+                                <div class="label-with-value">
+                                    <label for="cores">
+                                        <i data-lucide="cpu" class="field-icon"></i>
+                                        vCPU (Cores)
+                                    </label>
+                                </div>
+                                <div class="numeric-input-group">
+                                    <input type="number" id="cores" name="cores" min="1" max="128" value="2" step="1" required class="spec-number-input">
+                                    <span class="unit-suffix">vCPU</span>
+                                </div>
+                                <input type="range" id="coresRange" min="1" max="32" value="2" step="1" class="spec-range-slider">
                             </div>
-                            <input type="range" id="cores" name="cores" min="1" max="16" value="2" step="1">
-                        </div>
 
-                        <!-- Slider: Memory RAM -->
-                        <div class="form-group">
-                            <div class="label-with-value">
-                                <label for="memoryGb">
-                                    <i data-lucide="memory-stick" class="field-icon"></i>
-                                    Dung Lượng RAM (GB)
-                                </label>
-                                <span class="value-badge" id="memoryVal">2 GB</span>
+                            <div class="form-group flex-1">
+                                <div class="label-with-value">
+                                    <label for="memoryGb">
+                                        <i data-lucide="memory-stick" class="field-icon"></i>
+                                        Bộ nhớ RAM
+                                    </label>
+                                </div>
+                                <div class="numeric-input-group">
+                                    <input type="number" id="memoryGb" name="memoryGb" min="1" max="512" value="2" step="1" required class="spec-number-input">
+                                    <span class="unit-suffix">GB</span>
+                                </div>
+                                <input type="range" id="memoryGbRange" min="1" max="64" value="2" step="1" class="spec-range-slider">
                             </div>
-                            <input type="range" id="memoryGb" name="memoryGb" min="1" max="32" value="2" step="1">
-                        </div>
 
-                        <!-- Slider: Disk Size -->
-                        <div class="form-group">
-                            <div class="label-with-value">
-                                <label for="diskSizeGb">
-                                    <i data-lucide="database" class="field-icon"></i>
-                                    Ổ Đĩa OS (GB)
-                                </label>
-                                <span class="value-badge" id="diskSizeVal">20 GB</span>
+                            <div class="form-group flex-1">
+                                <div class="label-with-value">
+                                    <label for="diskSizeGb">
+                                        <i data-lucide="database" class="field-icon"></i>
+                                        Ổ Đĩa OS
+                                    </label>
+                                </div>
+                                <div class="numeric-input-group">
+                                    <input type="number" id="diskSizeGb" name="diskSizeGb" min="5" max="2000" value="20" step="5" required class="spec-number-input">
+                                    <span class="unit-suffix">GB</span>
+                                </div>
+                                <input type="range" id="diskSizeGbRange" min="10" max="200" value="20" step="5" class="spec-range-slider">
                             </div>
-                            <input type="range" id="diskSizeGb" name="diskSizeGb" min="10" max="200" value="20" step="5">
                         </div>
 
                         <div class="form-group">
@@ -319,19 +328,26 @@
                             </div>
                             <div class="script-presets-bar">
                                 <span class="presets-label">Mẫu sẵn có:</span>
+                                <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('debian')">🌀 Debian Root SSH & QEMU</button>
+                                <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('qemu')">🤖 QEMU Guest Agent</button>
                                 <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('docker')">🐳 Docker & Compose</button>
                                 <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('nginx')">🌐 Nginx Web Server</button>
                                 <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('security')">🛡️ Hardening & UFW</button>
                                 <button type="button" class="btn-preset-chip btn-preset-clear" onclick="applyScriptPreset('clear')">✕ Xóa</button>
                             </div>
-                            <textarea id="userData" name="userData" rows="5" class="code-textarea" placeholder="# Nhập Cloud-init user-data YAML hoặc Shell script bootstrap...
+                            <textarea id="userData" name="userData" rows="8" class="code-textarea" placeholder="# Nhập Cloud-init user-data YAML hoặc Shell script bootstrap...
 #cloud-config
+disable_root: false
+ssh_pwauth: true
+package_update: true
 packages:
+  - qemu-guest-agent
+  - sudo
   - curl
-  - htop
-  - git
 runcmd:
-  - [ systemctl, start, nginx ]"></textarea>
+  - sed -i -e '/^#*PermitRootLogin/c\PermitRootLogin prohibit-password' /etc/ssh/sshd_config
+  - systemctl restart sshd || systemctl restart ssh
+  - systemctl enable --now qemu-guest-agent"></textarea>
                             <div class="field-hint">
                                 <i data-lucide="info" style="width:12px;height:12px;display:inline;"></i>
                                 <span>Hỗ trợ định dạng <code>#cloud-config</code> YAML hoặc Script <code>#!/bin/bash</code> tự chạy khi máy ảo boot lần đầu.</span>

@@ -1446,19 +1446,29 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ==========================================
-    // 3. SLIDERS & DEPLOY FORM
+    // 3. HARDWARE SPECS INPUTS (2-Way Sync Number Input & Slider)
     // ==========================================
-    const coresInput = document.getElementById("cores");
-    const coresVal = document.getElementById("coresVal");
-    coresInput.addEventListener("input", (e) => coresVal.textContent = `${e.target.value} Cores`);
+    function setupSyncedInput(numberId, rangeId) {
+        const numInput = document.getElementById(numberId);
+        const rangeInput = document.getElementById(rangeId);
+        if (!numInput) return;
 
-    const memoryInput = document.getElementById("memoryGb");
-    const memoryVal = document.getElementById("memoryVal");
-    memoryInput.addEventListener("input", (e) => memoryVal.textContent = `${e.target.value} GB`);
+        if (rangeInput) {
+            rangeInput.addEventListener("input", (e) => {
+                numInput.value = e.target.value;
+            });
+            numInput.addEventListener("input", (e) => {
+                const val = parseFloat(e.target.value);
+                if (!isNaN(val)) {
+                    rangeInput.value = val;
+                }
+            });
+        }
+    }
 
-    const diskInput = document.getElementById("diskSizeGb");
-    const diskSizeVal = document.getElementById("diskSizeVal");
-    diskInput.addEventListener("input", (e) => diskSizeVal.textContent = `${e.target.value} GB`);
+    setupSyncedInput("cores", "coresRange");
+    setupSyncedInput("memoryGb", "memoryGbRange");
+    setupSyncedInput("diskSizeGb", "diskSizeGbRange");
 
     const vlanInput = document.getElementById("vlanTag");
     const vlanTagVal = document.getElementById("vlanTagVal");
@@ -1744,14 +1754,50 @@ document.addEventListener("DOMContentLoaded", () => {
     // SCRIPT PRESETS CHO POST-PROVISIONING HOOKS
     // ==========================================
     const scriptPresets = {
+        debian: `#cloud-config
+# Cho phép Root đăng nhập qua SSH Key & Bật QEMU Guest Agent trên Debian
+disable_root: false
+ssh_pwauth: true
+preserve_hostname: false
+
+package_update: true
+packages:
+  - qemu-guest-agent
+  - sudo
+  - curl
+  - htop
+
+runcmd:
+  # 1. Cấu hình SSHD cho phép root login bằng SSH Key
+  - sed -i -e 's/^#*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+  - sed -i -e 's/^#*PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+  - mkdir -p /root/.ssh && chmod 700 /root/.ssh
+  - touch /root/.ssh/authorized_keys && chmod 600 /root/.ssh/authorized_keys
+  - systemctl restart sshd || systemctl restart ssh
+  # 2. Kích hoạt QEMU Guest Agent để Proxmox nhận diện IP và ACPI Power
+  - systemctl enable --now qemu-guest-agent
+  - echo "Debian initialized with Root SSH Key & QEMU Agent" > /root/bootstrap.log`,
+
+        qemu: `#cloud-config
+# Tự động cập nhật gói và bật QEMU Guest Agent
+package_update: true
+packages:
+  - qemu-guest-agent
+runcmd:
+  - systemctl enable --now qemu-guest-agent
+  - echo "QEMU Guest Agent active" > /root/agent.log`,
+
         docker: `#cloud-config
 # Cài đặt tự động Docker Engine & Docker Compose
+package_update: true
 packages:
+  - qemu-guest-agent
   - curl
   - git
   - htop
   - ca-certificates
 runcmd:
+  - systemctl enable --now qemu-guest-agent
   - curl -fsSL https://get.docker.com -o get-docker.sh
   - sh get-docker.sh
   - usermod -aG docker root
@@ -1759,12 +1805,15 @@ runcmd:
   - echo "Docker installed successfully" > /root/bootstrap.log`,
 
         nginx: `#cloud-config
-# Cài đặt Nginx Web Server & trang chào mừng
+# Cài đặt Nginx Web Server & QEMU Guest Agent
+package_update: true
 packages:
+  - qemu-guest-agent
   - nginx
   - curl
   - ufw
 runcmd:
+  - systemctl enable --now qemu-guest-agent
   - systemctl enable --now nginx
   - echo "<h1>🚀 Deployed via Proxmox Pulumi Portal</h1><p>VM IP: $(hostname -I)</p>" > /usr/share/nginx/html/index.html
   - ufw allow 'Nginx Full'
@@ -1772,11 +1821,14 @@ runcmd:
 
         security: `#cloud-config
 # Tối ưu bảo mật hệ thống & Cấu hình UFW Firewall
+package_update: true
 packages:
+  - qemu-guest-agent
   - fail2ban
   - ufw
   - unattended-upgrades
 runcmd:
+  - systemctl enable --now qemu-guest-agent
   - ufw default deny incoming
   - ufw default allow outgoing
   - ufw allow 22/tcp

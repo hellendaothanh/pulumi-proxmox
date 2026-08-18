@@ -43,7 +43,7 @@ export function createVmProgram(config: VmConfig) {
         const combinedTags = Array.from(new Set([...envTag, ...customTags]));
 
         // Chuẩn bị Custom User Data / Post-provisioning bootstrap script
-        let customUserDataFile: proxmox.storage.File | undefined = undefined;
+        let customUserDataFile: proxmox.FileLegacy | undefined = undefined;
         let userDataFileId: pulumi.Input<string> | undefined = undefined;
 
         if (config.userData && config.userData.trim().length > 0) {
@@ -53,7 +53,21 @@ export function createVmProgram(config: VmConfig) {
                 userDataContent = `#cloud-config\n${userDataContent}`;
             }
 
-            customUserDataFile = new proxmox.storage.File(`userdata-${config.name.toLowerCase()}`, {
+            // Đảm bảo hostname của OS được đổi theo đúng tên VM (giống như Rocky Linux / CentOS)
+            if (!userDataContent.includes("hostname:")) {
+                const cleanHostname = config.name.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+                userDataContent = `${userDataContent}\n\nhostname: ${cleanHostname}\nfqdn: ${cleanHostname}.local\npreserve_hostname: false\n`;
+            }
+
+            // Nếu người dùng có cung cấp SSH Public Key và chưa có trong user-data, tự động gắn vào root/users
+            if (config.sshPublicKey && config.sshPublicKey.trim().length > 0) {
+                const cleanKey = config.sshPublicKey.trim();
+                if (!userDataContent.includes(cleanKey)) {
+                    userDataContent = `${userDataContent}\n\n# Auto-injected SSH Authorized Key\nssh_authorized_keys:\n  - ${cleanKey}\nusers:\n  - name: root\n    ssh_authorized_keys:\n      - ${cleanKey}\n`;
+                }
+            }
+
+            customUserDataFile = new proxmox.FileLegacy(`userdata-${config.name.toLowerCase()}`, {
                 nodeName: config.nodeName,
                 datastoreId: "local", // snippets thường lưu tại datastore 'local'
                 contentType: "snippets",
