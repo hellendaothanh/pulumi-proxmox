@@ -105,6 +105,59 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Helper Environment & Tags Badges
+    function getEnvironmentTag(tags) {
+        if (!tags) return "";
+        const list = Array.isArray(tags) ? tags : String(tags).split(/[,;\s]+/);
+        const lowerList = list.map(t => t.trim().toLowerCase());
+        if (lowerList.some(t => t === "pro" || t === "prod" || t === "production")) {
+            return `<span class="tag-env tag-env-pro"><span class="env-indicator-dot pro"></span>PROD</span>`;
+        }
+        if (lowerList.some(t => t === "stag" || t === "staging")) {
+            return `<span class="tag-env tag-env-stag"><span class="env-indicator-dot stag"></span>STAGING</span>`;
+        }
+        if (lowerList.some(t => t === "dev")) {
+            return `<span class="tag-env tag-env-dev"><span class="env-indicator-dot dev"></span>DEV</span>`;
+        }
+        return "";
+    }
+
+    function getCustomTags(tags) {
+        if (!tags || !tags.length) return "";
+        const envs = ["dev", "stag", "staging", "pro", "prod", "production"];
+        const list = Array.isArray(tags) ? tags : String(tags).split(/[,;\s]+/);
+        const filtered = list.map(t => t.trim()).filter(t => t && !envs.includes(t.toLowerCase()));
+        if (!filtered.length) return "";
+        return filtered.map(t => `<span class="tag-custom">#${t}</span>`).join(" ");
+    }
+
+    // Helper trích xuất thông tin & dung lượng ổ đĩa của VM
+    function getVmDiskSize(vm) {
+        if (!vm) return "N/A";
+        const cfg = vm.config || {};
+
+        // Quét các bus lưu trữ phổ biến trên Proxmox: scsi0..3, virtio0..3, sata0..3, ide0..3
+        for (const prefix of ["scsi", "virtio", "sata", "ide"]) {
+            for (let i = 0; i < 4; i++) {
+                const val = cfg[`${prefix}${i}`];
+                if (val && typeof val === "string") {
+                    // Match dạng "size=32G" hoặc "size=100G" hoặc "size=10240M"
+                    const m = val.match(/size=([0-9.]+[GMKTP]?i?B?)/i);
+                    if (m && m[1]) return m[1].toUpperCase();
+                    // Match dạng "zfs-storage:vm-100-disk-0,size=30G"
+                    const m2 = val.match(/,([0-9.]+[GMKTP]?)/i);
+                    if (m2 && m2[1] && isNaN(Number(m2[1]))) return m2[1].toUpperCase();
+                }
+            }
+        }
+
+        // Fallback sang trường maxdisk từ status/qemu API nếu có
+        if (vm.maxdisk && vm.maxdisk > 0) {
+            return formatBytes(vm.maxdisk);
+        }
+
+        return "Disk: N/A";
+    }
+
     function renderEnvBadge(env) {
         const e = (env || "dev").toLowerCase();
         if (e === "pro" || e === "prod" || e === "production") {
@@ -117,12 +170,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function renderCustomTags(tags) {
-        if (!tags || !tags.length) return "";
-        const envs = ["dev", "stag", "staging", "pro", "prod", "production"];
-        const list = Array.isArray(tags) ? tags : String(tags).split(/[,;\s]+/);
-        const filtered = list.map(t => t.trim()).filter(t => t && !envs.includes(t.toLowerCase()));
-        if (!filtered.length) return "";
-        return filtered.map(t => `<span class="tag-custom">#${t}</span>`).join(" ");
+        return getCustomTags(tags);
     }
 
     function getNodePrimaryStorageType(node) {
@@ -183,15 +231,93 @@ document.addEventListener("DOMContentLoaded", () => {
             });
 
             cachedClusterData = data.data;
-            renderClusterView(data.data);
+            renderClusterView(data.data, currentSearchTerm);
             populateDeployForm(data.data);
         } catch (err) {
             clusterContainer.innerHTML = `<div class="card text-center text-error">Lỗi kết nối API: ${err.message}</div>`;
         }
     }
 
-    function renderClusterView(nodes) {
-        clusterContainer.innerHTML = nodes.map(node => {
+    let currentSearchTerm = "";
+
+    function renderClusterView(nodes, searchTerm = "") {
+        const term = (searchTerm || "").trim().toLowerCase();
+
+        // Lọc danh sách nodes hoặc VMs nếu có searchTerm
+        const filteredNodes = nodes.map(node => {
+            if (!term) return node;
+
+            const nodeMatches = (node.node || "").toLowerCase().includes(term);
+            const filteredVms = (node.vms || []).filter(vm => {
+                const nameMatches = (vm.name || "").toLowerCase().includes(term);
+                const idMatches = String(vm.vmid || "").includes(term);
+                const statusMatches = (typeof vm.status === "object" ? vm.status?.status : vm.status || "").toLowerCase().includes(term);
+                const ipMatches = (vm.agentIps || []).some(ip => ip.toLowerCase().includes(term));
+                const tagMatches = (Array.isArray(vm.tags) ? vm.tags.join(" ") : String(vm.tags || "")).toLowerCase().includes(term);
+                return nameMatches || idMatches || statusMatches || ipMatches || tagMatches;
+            });
+
+            if (nodeMatches) {
+                return node; // Nếu tìm trúng tên node thì hiển thị toàn bộ VM của node đó
+            }
+
+            return {
+                ...node,
+                vms: filteredVms,
+                _matchedVmsCount: filteredVms.length
+            };
+        }).filter(node => !term || (node.node || "").toLowerCase().includes(term) || (node.vms && node.vms.length > 0));
+
+        if (filteredNodes.length === 0) {
+            clusterContainer.innerHTML = `
+                <div class="card text-center text-muted" style="padding: 40px 20px;">
+                    <i data-lucide="search-x" style="width:40px;height:40px;margin:0 auto 12px;opacity:0.6;display:block;"></i>
+                    <h3 style="color:#f8fafc; font-size:16px; margin-bottom:6px;">Không tìm thấy máy ảo hoặc Node phù hợp</h3>
+                    <p style="font-size:13px;">Không có kết quả nào khớp với từ khóa "<strong>${searchTerm}</strong>". Thử tìm theo Tên VM, VM ID, IP hoặc Tags.</p>
+                </div>
+            `;
+            if (window.lucide) window.lucide.createIcons();
+            return;
+        }
+
+        // Tạo thanh Mục Lục Node (Node Quick Nav Index)
+        const nodeIndexHtml = `
+            <div class="node-quick-nav">
+                <div class="quick-nav-header">
+                    <div class="quick-nav-title">
+                        <i data-lucide="compass" class="nav-icon"></i>
+                        <span>Mục Lục Node (${filteredNodes.length} Nodes)</span>
+                    </div>
+                    <div class="quick-nav-actions">
+                        <button class="btn-toggle-all" onclick="expandAllNodes(true)">
+                            <i data-lucide="chevrons-down" class="btn-icon-xs"></i>
+                            <span>Mở tất cả</span>
+                        </button>
+                        <button class="btn-toggle-all" onclick="expandAllNodes(false)">
+                            <i data-lucide="chevrons-up" class="btn-icon-xs"></i>
+                            <span>Thu gọn</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="quick-nav-chips">
+                    ${filteredNodes.map(node => {
+                        const vmCount = node.vms ? node.vms.length : 0;
+                        const runningCount = node.vms ? node.vms.filter(v => (typeof v.status === "object" ? v.status?.status : v.status) === "running").length : 0;
+                        const storageType = getNodePrimaryStorageType(node);
+                        return `
+                            <button class="node-chip-link" onclick="focusAndScrollToNode('${node.node}')" title="Chuyển nhanh đến ${node.node}">
+                                <span class="status-dot online"></span>
+                                <strong>${node.node}</strong>
+                                <span class="chip-vm-count">${runningCount}/${vmCount} VMs</span>
+                                <span class="chip-storage-tag">${storageType.toUpperCase()}</span>
+                            </button>
+                        `;
+                    }).join("")}
+                </div>
+            </div>
+        `;
+
+        const nodesCardsHtml = filteredNodes.map(node => {
             // Lấy IP chính của node từ network
             const primaryNet = node.networks.find(n => n.address) || node.networks[0] || {};
             const nodeIp = primaryNet.address || "192.168.1.x";
@@ -252,43 +378,61 @@ document.addEventListener("DOMContentLoaded", () => {
             const vmsHtml = node.vms && node.vms.length > 0 ? node.vms.map(vm => {
                 const statusStr = typeof vm.status === "object" ? (vm.status?.status || "unknown") : (vm.status || "unknown");
                 const isRunning = statusStr === "running";
+                const envTagHtml = getEnvironmentTag(vm.tags);
+                const customTagsHtml = getCustomTags(vm.tags);
+
                 const ipBadges = vm.agentIps && vm.agentIps.length > 0 
-                    ? vm.agentIps.map(ip => `
+                    ? `<div class="ip-chips-grid">${vm.agentIps.map(ip => `
                         <button class="copy-chip-sm" onclick="copyToClipboard('${ip}', this)" title="Click để sao chép IP">
+                            <i data-lucide="network" style="width:11px;height:11px;opacity:0.7;"></i>
                             <span>${ip}</span>
                             <i data-lucide="copy" class="copy-icon-sm"></i>
                         </button>
-                    `).join(" ") 
-                    : `<span class="text-muted" style="font-size:11.5px;">${isRunning ? "Chờ Agent..." : "-"}</span>`;
+                    `).join("")}</div>`
+                    : `<span class="text-muted" style="font-size:11px;">${isRunning ? "Chờ Agent..." : "—"}</span>`;
 
                 return `
                     <tr>
-                        <td>
-                            <strong>${vm.name}</strong>
-                            ${vm.config?.protection ? '<span class="badge-protected"><i data-lucide="shield-alert" class="badge-svg"></i> Protected</span>' : ''}
+                        <td class="vm-name-cell">
+                            <div class="vm-name-title">
+                                <span class="vm-name-text" title="${vm.name}">${vm.name}</span>
+                                ${vm.config?.protection ? '<span class="badge-protected" title="Bảo vệ xoá"><i data-lucide="shield-alert" class="badge-svg"></i></span>' : ''}
+                            </div>
+                            <div class="vm-tags-row">
+                                <span class="vm-id-badge">#${vm.vmid}</span>
+                                ${envTagHtml}
+                                ${customTagsHtml}
+                            </div>
                         </td>
-                        <td><code>${vm.vmid}</code></td>
                         <td>
                             <span class="status-indicator ${isRunning ? 'status-running' : 'status-stopped'}">
                                 <span class="status-dot ${isRunning ? 'online' : ''}"></span>
                                 ${isRunning ? 'Running' : (statusStr === 'stopped' ? 'Stopped' : statusStr)}
                             </span>
                         </td>
-                        <td>${ipBadges}</td>
-                        <td><small>${vm.cpus} vCPU | ${formatBytes(vm.maxmem)} RAM</small></td>
+                        <td class="vm-ip-cell">${ipBadges}</td>
+                        <td class="vm-specs-cell">
+                            <span class="spec-pill"><i data-lucide="cpu" class="spec-icon"></i> ${vm.cpus} vCPU</span>
+                            <span class="spec-pill"><i data-lucide="layers" class="spec-icon"></i> ${formatBytes(vm.maxmem)}</span>
+                            <span class="spec-pill"><i data-lucide="hard-drive" class="spec-icon"></i> ${getVmDiskSize(vm)}</span>
+                        </td>
                         <td class="text-right">
-                            <button class="btn-action-sm" onclick="showVmDetail('${node.node}', ${vm.vmid})">
-                                <i data-lucide="eye" class="btn-icon-sm"></i> Chi tiết
+                            <button class="btn-action-sm" onclick="showVmDetail('${node.node}', ${vm.vmid})" title="Xem cấu hình Proxmox">
+                                <i data-lucide="eye" class="btn-icon-sm"></i>
+                                <span>Chi tiết</span>
                             </button>
                         </td>
                     </tr>
                 `;
-            }).join("") : `<tr><td colspan="6" class="text-center text-muted">Không có VM nào trên node này</td></tr>`;
+            }).join("") : `<tr><td colspan="5" class="text-center text-muted" style="padding: 24px;">Không có máy ảo nào trên node này</td></tr>`;
 
             return `
-                <div class="node-block">
-                    <div class="node-header">
+                <div class="node-block" id="node-block-${node.node}">
+                    <div class="node-header" onclick="toggleNodeCollapse('${node.node}')" title="Nhấp để đóng/mở chi tiết Node ${node.node}">
                         <div class="node-title-group">
+                            <button class="btn-node-toggle" id="btn-toggle-${node.node}">
+                                <i data-lucide="chevron-down" class="toggle-icon"></i>
+                            </button>
                             <i data-lucide="server" class="icon-accent" style="width:24px;height:24px;"></i>
                             <div>
                                 <div style="display:flex; align-items:center; gap:8px;">
@@ -296,15 +440,16 @@ document.addEventListener("DOMContentLoaded", () => {
                                     ${getNodePrimaryStorageType(node) === 'zfs' 
                                         ? '<span class="storage-pill storage-pill-zfs"><i data-lucide="database" class="pill-icon"></i> ZFS Pool</span>' 
                                         : (getNodePrimaryStorageType(node) === 'lvm' ? '<span class="storage-pill storage-pill-lvm"><i data-lucide="hard-drive" class="pill-icon"></i> LVM-Thin</span>' : '<span class="storage-pill storage-pill-dir"><i data-lucide="folder" class="pill-icon"></i> Directory</span>')}
+                                    <span class="node-vm-badge">${node.vms ? node.vms.length : 0} VMs</span>
                                 </div>
-                                <button class="copy-chip" onclick="copyToClipboard('${nodeIp}', this)" title="Click để sao chép IP Node">
+                                <button class="copy-chip" onclick="event.stopPropagation(); copyToClipboard('${nodeIp}', this)" title="Click để sao chép IP Node">
                                     <i data-lucide="network" class="chip-icon"></i>
                                     <span>IP: ${nodeIp}</span>
                                     <i data-lucide="copy" class="copy-icon"></i>
                                 </button>
                             </div>
                         </div>
-                        <div class="node-stats-summary">
+                        <div class="node-stats-summary" onclick="event.stopPropagation();">
                             <div class="stat-box">
                                 <span class="stat-label">CPU Sử Dụng</span>
                                 <span class="stat-value">${cpuPercent}%</span>
@@ -320,40 +465,41 @@ document.addEventListener("DOMContentLoaded", () => {
                         </div>
                     </div>
 
-                    <div class="node-content-grid">
-                        <!-- Storages Column -->
-                        <div>
-                            <div class="sub-section-title">
-                                <i data-lucide="hard-drive" class="field-icon"></i>
-                                <span>Storages & Disks (Local / LVM / ZFS)</span>
+                    <div class="node-collapsible-body" id="node-body-${node.node}">
+                        <div class="node-content-grid">
+                            <!-- Storages Column -->
+                            <div>
+                                <div class="sub-section-title">
+                                    <i data-lucide="hard-drive" class="field-icon"></i>
+                                    <span>Storages & Disks (Local / LVM / ZFS)</span>
+                                </div>
+                                <div class="storage-list">
+                                    ${storagesHtml}
+                                </div>
                             </div>
-                            <div class="storage-list">
-                                ${storagesHtml}
-                            </div>
-                        </div>
 
-                        <!-- VMs Column -->
-                        <div>
-                            <div class="sub-section-title">
-                                <i data-lucide="monitor" class="field-icon"></i>
-                                <span>Danh Sách Máy Ảo (${node.vms.length} VMs)</span>
-                            </div>
-                            <div class="table-responsive">
-                                <table class="vms-overview-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Tên VM</th>
-                                            <th>VM ID</th>
-                                            <th>Trạng Thái</th>
-                                            <th>IP Address</th>
-                                            <th>Cấu Hình</th>
-                                            <th class="text-right">Xem</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        ${vmsHtml}
-                                    </tbody>
-                                </table>
+                            <!-- VMs Column -->
+                            <div>
+                                <div class="sub-section-title">
+                                    <i data-lucide="monitor" class="field-icon"></i>
+                                    <span>Danh Sách Máy Ảo (${node.vms.length} VMs)</span>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="vms-overview-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="min-width: 140px;">Máy Ảo & ID</th>
+                                                <th style="min-width: 95px;">Trạng Thái</th>
+                                                <th style="min-width: 120px;">Địa Chỉ IP</th>
+                                                <th style="min-width: 130px;">Cấu Hình</th>
+                                                <th class="text-right" style="min-width: 70px;">Thao Tác</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${vmsHtml}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -361,11 +507,136 @@ document.addEventListener("DOMContentLoaded", () => {
             `;
         }).join("");
 
+        clusterContainer.innerHTML = nodeIndexHtml + nodesCardsHtml;
+
         if (window.lucide) window.lucide.createIcons();
     }
 
     btnRefreshResources.addEventListener("click", loadClusterResources);
     loadClusterResources();
+
+    // ==========================================
+    // TÌM KIẾM TỨC THÌ (INSTANT SEARCH)
+    // ==========================================
+    const vmSearchInput = document.getElementById("vmSearchInput");
+    const btnClearSearch = document.getElementById("btnClearSearch");
+
+    if (vmSearchInput) {
+        vmSearchInput.addEventListener("input", (e) => {
+            currentSearchTerm = e.target.value;
+            if (btnClearSearch) {
+                if (currentSearchTerm.length > 0) {
+                    btnClearSearch.classList.remove("hidden");
+                } else {
+                    btnClearSearch.classList.add("hidden");
+                }
+            }
+            if (cachedClusterData.length > 0) {
+                renderClusterView(cachedClusterData, currentSearchTerm);
+            }
+        });
+    }
+
+    if (btnClearSearch) {
+        btnClearSearch.addEventListener("click", () => {
+            if (vmSearchInput) {
+                vmSearchInput.value = "";
+                currentSearchTerm = "";
+                btnClearSearch.classList.add("hidden");
+                vmSearchInput.focus();
+                if (cachedClusterData.length > 0) {
+                    renderClusterView(cachedClusterData, "");
+                }
+            }
+        });
+    }
+
+    // ==========================================
+    // NÚT LÊN ĐẦU TRANG (BACK TO TOP)
+    // ==========================================
+    const btnBackToTop = document.getElementById("btnBackToTop");
+    if (btnBackToTop) {
+        window.addEventListener("scroll", () => {
+            if (window.scrollY > 280) {
+                btnBackToTop.classList.remove("hidden");
+            } else {
+                btnBackToTop.classList.add("hidden");
+            }
+        });
+
+        btnBackToTop.addEventListener("click", () => {
+            window.scrollTo({
+                top: 0,
+                behavior: "smooth"
+            });
+        });
+    }
+
+    // ==========================================
+    // QUẢN LÝ MỤC LỤC & ĐÓNG/MỞ CHI TIẾT NODE (COLLAPSIBLE NODES)
+    // ==========================================
+    window.toggleNodeCollapse = (nodeName) => {
+        const body = document.getElementById(`node-body-${nodeName}`);
+        const btn = document.getElementById(`btn-toggle-${nodeName}`);
+        if (!body) return;
+
+        const isCollapsed = body.classList.toggle("collapsed");
+        if (btn) {
+            btn.classList.toggle("collapsed", isCollapsed);
+        }
+    };
+
+    window.expandAllNodes = (expand = true) => {
+        const bodies = document.querySelectorAll(".node-collapsible-body");
+        const btns = document.querySelectorAll(".btn-node-toggle");
+
+        bodies.forEach(body => {
+            if (expand) {
+                body.classList.remove("collapsed");
+            } else {
+                body.classList.add("collapsed");
+            }
+        });
+
+        btns.forEach(btn => {
+            if (expand) {
+                btn.classList.remove("collapsed");
+            } else {
+                btn.classList.add("collapsed");
+            }
+        });
+    };
+
+    window.focusAndScrollToNode = (nodeName) => {
+        const targetNode = document.getElementById(`node-block-${nodeName}`);
+        const body = document.getElementById(`node-body-${nodeName}`);
+        const btn = document.getElementById(`btn-toggle-${nodeName}`);
+
+        if (targetNode) {
+            // Mở node nếu đang bị đóng
+            if (body && body.classList.contains("collapsed")) {
+                body.classList.remove("collapsed");
+                if (btn) btn.classList.remove("collapsed");
+            }
+
+            // Cuộn mượt đến node (trừ hao chiều cao của Sticky Navbar + Sticky Quick Nav)
+            const quickNav = document.querySelector(".node-quick-nav");
+            const navHeight = quickNav ? quickNav.offsetHeight + 24 : 120;
+            const elementPosition = targetNode.getBoundingClientRect().top;
+            const offsetPosition = elementPosition + window.pageYOffset - navHeight;
+
+            window.scrollTo({
+                top: offsetPosition,
+                behavior: "smooth"
+            });
+
+            // Hiệu ứng highlight phát sáng nhẹ để người dùng nhận diện
+            targetNode.classList.add("node-highlight");
+            setTimeout(() => {
+                targetNode.classList.remove("node-highlight");
+            }, 1800);
+        }
+    };
 
     window.toggleStorageFiles = (id) => {
         const el = document.getElementById(`files-${id}`);
@@ -393,6 +664,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const statusStr = typeof vm.status === "object" ? (vm.status?.status || "unknown") : (vm.status || "unknown");
         const isRunning = statusStr === "running";
+        const diskDisplay = getVmDiskSize(vm);
 
         modalVmTitle.textContent = `Chi Tiết Máy Ảo: ${vm.name} (ID: ${vmid})`;
         modalVmBody.innerHTML = `
@@ -417,6 +689,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div class="modal-field">
                     <div class="modal-label">RAM Đã Gán</div>
                     <div class="modal-value">${formatBytes(vm.maxmem)}</div>
+                </div>
+                <div class="modal-field">
+                    <div class="modal-label">Dung Lượng Ổ Đĩa (Disk Size)</div>
+                    <div class="modal-value">${diskDisplay}</div>
                 </div>
                 <div class="modal-field">
                     <div class="modal-label">Machine Type</div>
@@ -879,19 +1155,41 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const terminal = document.getElementById("terminal");
+    const btnClearLogs = document.getElementById("btnClearLogs");
+    const btnCopyLogs = document.getElementById("btnCopyLogs");
     let activeProgressLine = null;
     let progressStartTime = null;
     let progressInterval = null;
     let currentProgressAction = "Updating";
 
-    btnClearLogs.addEventListener("click", () => {
-        if (progressInterval) clearInterval(progressInterval);
-        activeProgressLine = null;
-        progressStartTime = null;
-        progressInterval = null;
-        currentProgressAction = "Updating";
-        terminal.innerHTML = '<div class="terminal-line text-info">[System] Logs cleared.</div>';
-    });
+    if (btnCopyLogs) {
+        btnCopyLogs.addEventListener("click", () => {
+            if (!terminal) return;
+            const logLines = Array.from(terminal.querySelectorAll(".terminal-line"))
+                .map(el => el.textContent)
+                .filter(t => t && t.trim().length > 0)
+                .join("\n");
+
+            if (!logLines || logLines.trim().length === 0) {
+                showToast("Nhật ký đang trống!");
+                return;
+            }
+
+            copyToClipboard(logLines, btnCopyLogs);
+            showToast("📋 Đã sao chép toàn bộ nhật ký!");
+        });
+    }
+
+    if (btnClearLogs) {
+        btnClearLogs.addEventListener("click", () => {
+            if (progressInterval) clearInterval(progressInterval);
+            activeProgressLine = null;
+            progressStartTime = null;
+            progressInterval = null;
+            currentProgressAction = "Updating";
+            terminal.innerHTML = '<div class="terminal-line text-info">[System] Logs cleared.</div>';
+        });
+    }
 
     function cleanAnsi(str) {
         return str.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
@@ -1026,7 +1324,12 @@ document.addEventListener("DOMContentLoaded", () => {
             // In dòng log thông thường
             const line = document.createElement("div");
             line.className = "terminal-line";
-            if (trimmed.includes("ERROR") || trimmed.includes("error") || trimmed.includes("failed") || trimmed.includes("❌")) {
+            if (trimmed.includes("DESTROYED") || trimmed.includes("[DESTROYED]")) {
+                line.classList.add("log-destroyed-highlight");
+                showToast("🗑️ " + trimmed.replace(/^\[DESTROYED\]\s*/, ''));
+                if (typeof loadClusterResources === "function") loadClusterResources();
+                if (typeof loadVms === "function") loadVms();
+            } else if (trimmed.includes("ERROR") || trimmed.includes("error") || trimmed.includes("failed") || trimmed.includes("❌")) {
                 line.classList.add("text-error");
             } else if (trimmed.includes("SUCCESS") || trimmed.includes("created") || trimmed.includes("updated") || trimmed.includes("✅")) {
                 line.classList.add("text-success");

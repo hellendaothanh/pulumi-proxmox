@@ -10,10 +10,20 @@ An enterprise-ready, self-service infrastructure portal and automation platform 
 
 ## 🌟 Key Features
 
-### 1. 📊 Cluster Resource Overview
+### 1. 📊 Cluster Resource Overview & Smart Navigation
+* **Sticky Node Quick Navigation Bar**:
+  * Pinned navigation bar that remains visible when scrolling, showing real-time cluster health, VM tally (`running/total`), and storage engines per node.
+  * **1-Click Jump**: Smoothly scrolls directly to the targeted node and triggers a temporary Purple Glow Highlight effect.
+  * **Collapsible Node Cards**: Click any node header to collapse/expand its VM & storage panels; includes *Expand All* / *Collapse All* bulk triggers.
+* **Instant Search**:
+  * Real-time fuzzy filtering across VM Names, VM IDs, IP addresses, Node Names, Environments, and custom Tags.
 * **Real-time Node Telemetry**: Node Online/Offline status, % CPU load, RAM usage/available, Uptime, and Node IP addresses (with **1-Click Copy IP**).
 * **Storage Pools Inspector**: Deep inspection of Storage Pools (`ZFS`, `zfs-storage`, `local-lvm`, `Directory`), listing available ISOs, Cloud-Init Images, and VM Disks.
-* **VM Inventory per Node**: Interactive VM tables per cluster node with automatic IP extraction via **QEMU Guest Agent** and Proxmox Raw Configuration viewer modal.
+* **Redesigned Clean VM Table**:
+  * Intelligently combines VM Name, ID, and Tags in a single structured column.
+  * Displays complete hardware specs via Spec Pills: `<cpu> vCPU`, `<layers> RAM`, and `<hard-drive> Disk Size`.
+  * **2-Column IP Grid Matrix**: Automatically restricts multi-IP displays to a clean 2-column layout to prevent table overflow and maintain visual balance.
+  * **Back to Top Floating Button**: Smart floating button that triggers smooth scrolling back to the top of the dashboard.
 
 ### 2. ⚡ Single & Multi-Node Batch VM Provisioning
 * **Deploy 1 to 10 VMs in Batches**:
@@ -35,12 +45,13 @@ An enterprise-ready, self-service infrastructure portal and automation platform 
   * Emulates modern `q35` chipset, Cloud-Init on `ide0`/`scsi0`, and `virtio-scsi-single` storage controllers.
   * Integrates Proxmox **Protection Mode** flag to prevent accidental deletion of critical production VMs.
 
-### 3. 🛠️ Self-Service Pulumi Stack Management
+### 3. 🛠️ Self-Service Pulumi Stack Management & Live Terminal Logs
 * Inventory of all active Pulumi Stacks provisioned through the portal.
 * **1-Click Copy IP**: Instant VM IP copy for fast SSH and service connectivity.
 * **Live Streaming Console (SSE)**:
-  * Real-time `pulumi up` / `pulumi destroy` streaming output directly in the web browser.
-  * Smart elapsed timer `[RUNNING] @ Updating... [15s]` with DevOps-styled colored logs.
+  * Real-time `pulumi up` / `pulumi destroy` streaming output directly in the web browser with elapsed timer `[RUNNING] @ Updating... [15s]`.
+  * **Destroyed Status Highlighting (`[DESTROYED]`)**: Prominent amber badge banner upon successful stack teardown, with toast notifications and automatic table refresh.
+  * **Copy Logs Button (`[📋 Copy log]`)**: 1-click clipboard copy for the entire console output.
   * Safe guards and confirmation prompts when destroying protected VM instances.
 
 ---
@@ -50,12 +61,12 @@ An enterprise-ready, self-service infrastructure portal and automation platform 
 ```text
 pulumi-proxmox/
 ├── public/                       # Frontend Web Portal (Dark Glassmorphic UI)
-│   ├── index.html                # UI Structure & Provisioning Forms
-│   ├── style.css                 # CSS Design System & Micro-animations
-│   └── app.js                    # Frontend logic, WebSocket/SSE log streaming
+│   ├── index.html                # UI Structure, Navigation Bar & Provisioning Forms
+│   ├── style.css                 # CSS Design System, Responsive & Micro-animations
+│   └── app.js                    # Frontend logic, Instant Search, Sticky Nav, SSE log stream
 ├── src/                          # Backend & Pulumi IaC Sources
 │   ├── server.ts                 # Express Server & Pulumi Automation API Runner
-│   ├── proxmox-api.ts            # Proxmox REST API Client
+│   ├── proxmox-api.ts            # Proxmox REST API Client (Fetch Nodes, Storages, VMs, Disks)
 │   └── pulumi-program.ts         # Pulumi Resource Definitions for Proxmox VE
 ├── .env.example                  # Environment Variables Template
 ├── package.json                  # Dependencies & Scripts

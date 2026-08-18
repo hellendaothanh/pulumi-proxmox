@@ -54,10 +54,19 @@
                     <h2>Tổng Quan Tài Nguyên Hạ Tầng</h2>
                     <p>Theo dõi thời gian thực về Node IP, Local & LVM & ZFS Storage, ISO Images và danh sách toàn bộ VM</p>
                 </div>
-                <button id="btnRefreshResources" class="btn-secondary">
-                    <i data-lucide="refresh-cw" class="btn-icon-sm"></i>
-                    <span>Cập Nhật Dữ Liệu</span>
-                </button>
+                <div class="overview-toolbar">
+                    <div class="search-input-wrapper">
+                        <i data-lucide="search" class="search-icon"></i>
+                        <input type="text" id="vmSearchInput" class="search-input" placeholder="Tìm kiếm VM (Tên, ID, IP, Tag, Node)...">
+                        <button id="btnClearSearch" class="btn-clear-search hidden" title="Xóa tìm kiếm">
+                            <i data-lucide="x" style="width:14px;height:14px;"></i>
+                        </button>
+                    </div>
+                    <button id="btnRefreshResources" class="btn-secondary">
+                        <i data-lucide="refresh-cw" class="btn-icon-sm"></i>
+                        <span>Cập Nhật Dữ Liệu</span>
+                    </button>
+                </div>
             </div>
 
             <!-- Container rendered dynamically by JS -->
@@ -356,10 +365,16 @@
                         </div>
                         <p>Luồng output trực tiếp từ tiến trình Engine theo thời gian thực (SSE)</p>
                     </div>
-                    <button id="btnClearLogs" class="btn-text-only">
-                        <i data-lucide="trash-2" class="btn-icon-sm"></i>
-                        <span>Xóa log</span>
-                    </button>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button id="btnCopyLogs" class="btn-text-only" title="Sao chép toàn bộ nội dung nhật ký">
+                            <i data-lucide="copy" class="btn-icon-sm"></i>
+                            <span>Sao chép log</span>
+                        </button>
+                        <button id="btnClearLogs" class="btn-text-only" title="Xóa màn hình nhật ký">
+                            <i data-lucide="trash-2" class="btn-icon-sm"></i>
+                            <span>Xóa log</span>
+                        </button>
+                    </div>
                 </div>
                 <div class="terminal-container full-height" id="terminal">
                     <div class="terminal-line text-info">[System] Ready to stream deployment logs...</div>
@@ -386,6 +401,11 @@
         </div>
     </div>
 
-    <script src="app.js?v=20260818-7"></script>
+    <!-- Nút Lên Đầu Trang (Back To Top) -->
+    <button id="btnBackToTop" class="btn-back-to-top hidden" title="Lên đầu trang">
+        <i data-lucide="chevron-up" class="btn-icon"></i>
+    </button>
+
+    <script src="app.js?v=20260818-8"></script>
 </body>
 </html>

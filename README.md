@@ -10,10 +10,20 @@ Hệ thống quản lý, giám sát và tự động hóa khởi tạo hạ tầ
 
 ## 🌟 Tính Năng Nổi Bật
 
-### 1. 📊 Giám Sát Tài Nguyên Toàn Cụm (Cluster Overview)
+### 1. 📊 Giám Sát Tài Nguyên Toàn Cụm & Điều Hướng Thông Minh
+* **Thanh Mục Lục Node Neo Cố Định (Sticky Node Quick Nav)**:
+  * Thanh điều hướng ghim ở mép trên màn hình khi cuộn trang, hiển thị tổng quan trạng thái, số lượng VM (`running/total`) và loại Storage của từng Node.
+  * **1-Click Chuyển Nhanh**: Tự động cuộn mượt (Smooth scroll) đến đúng Node và kích hoạt hiệu ứng viền phát sáng (Purple Glow Highlight).
+  * **Đóng/Mở Chi Tiết Từng Node (Collapsible Node Cards)**: Nhấp vào tiêu đề để thu gọn hoặc mở rộng nội dung; hỗ trợ nút *Mở tất cả* / *Thu gọn tất cả*.
+* **Tìm Kiếm Tức Thì (Instant Search)**:
+  * Lọc thời gian thực theo Tên VM, VM ID, Địa chỉ IP, Node Name, Môi trường và Tags tùy chỉnh.
 * **Thông tin Node thời gian thực**: Trạng thái Online/Offline, % CPU tải, RAM sử dụng/còn trống, Uptime và địa chỉ IP của từng Node (kèm nút **1-Click Copy IP**).
 * **Quản lý Kho Lưu Trữ (Storage Pools)**: Hiển thị dung lượng chi tiết của các Storage Pools (`ZFS`, `zfs-storage`, `local-lvm`, `Directory`), xem danh sách các file ISO, Cloud-Init Images và VM Disks bên trong.
-* **Danh sách Máy Ảo theo Node**: Hiển thị bảng VMs của từng Node, tự động trích xuất IP qua **QEMU Guest Agent** và Modal xem toàn bộ cấu hình gốc (Proxmox Raw Config).
+* **Bảng Danh Sách Máy Ảo Tinh Gọn**:
+  * Gộp thông minh Tên VM, ID và Tags vào một cột rõ ràng, chống rối mắt.
+  * Hiển thị đầy đủ thông số phần cứng dạng Spec Pills: `<cpu> vCPU`, `<layers> RAM`, và `<hard-drive> Disk Size`.
+  * **Bố cục IP ma trận**: Tự động giới hạn tối đa 2 dải IP trên mỗi hàng, giúp bảng cân đối và không bị kéo dãn khi VM có nhiều card mạng.
+  * **Nút Cuộn Lên Đầu Trang (Back to Top)**: Nút nổi thông minh xuất hiện khi cuộn trang, hỗ trợ quay lại đầu trang tức thì.
 
 ### 2. ⚡ Khởi Tạo Máy Ảo Đơn & Cụm Máy Ảo (Single & Multi-Node Batch Deploy)
 * **Khởi tạo 1 VM hoặc Cụm nhiều VM (1 - 10 VMs)**:
@@ -35,12 +45,13 @@ Hệ thống quản lý, giám sát và tự động hóa khởi tạo hạ tầ
   * Sử dụng Chipset `q35`, Cloud-Init trên bus `ide0`/`scsi0` và chuẩn SCSI Controller `virtio-scsi-single`.
   * Tích hợp cơ chế **Protection Mode** chống xóa nhầm máy ảo quan trọng trên Proxmox VE.
 
-### 3. 🛠️ Bảng Điều Khiển Quản Lý Stack (Self-Service Pulumi Dashboard)
+### 3. 🛠️ Bảng Điều Khiển Quản Lý Stack & Terminal Logs (Self-Service Dashboard)
 * Danh sách toàn bộ các Pulumi Stacks đã triển khai qua Portal.
 * **1-Click Copy IP**: Sao chép nhanh địa chỉ IP của VM để SSH hoặc cấu hình ứng dụng.
 * **Terminal Console Thời Gian Thực (SSE Stream)**:
-  * Theo dõi tiến trình `pulumi up` / `pulumi destroy` trực tiếp từ Web UI.
-  * Tích hợp bộ đếm giây thông minh `[RUNNING] @ Updating... [15s]` và log chuẩn DevOps CLI.
+  * Theo dõi tiến trình `pulumi up` / `pulumi destroy` trực tiếp từ Web UI với bộ đếm giây `[RUNNING] @ Updating... [15s]`.
+  * **Nổi bật trạng thái Xóa Thành Công (`[DESTROYED]`)**: Banner cam viền nổi bật giúp nhận biết ngay khi hạ tầng đã dọn dẹp sạch sẽ, kèm thông báo Toast và tự động làm mới bảng.
+  * **Nút Sao Chép Nhật Ký (`[📋 Sao chép log]`)**: Copy toàn bộ output log trong Terminal chỉ với 1 cú nhấp chuột.
   * Cảnh báo an toàn khi xóa máy ảo đang bật chế độ Protection trên Proxmox VE.
 
 ---
@@ -50,12 +61,12 @@ Hệ thống quản lý, giám sát và tự động hóa khởi tạo hạ tầ
 ```text
 pulumi-proxmox/
 ├── public/                       # Giao diện Web Portal (Dark Glassmorphic UI)
-│   ├── index.html                # Cấu trúc giao diện và các form khởi tạo
-│   ├── style.css                 # Hệ thống CSS Design System & Micro-animations
-│   └── app.js                    # Xử lý tương tác Frontend, WebSocket/SSE log stream
+│   ├── index.html                # Cấu trúc giao diện, thanh điều hướng và các form
+│   ├── style.css                 # Hệ thống CSS Design System, Responsive & Micro-animations
+│   └── app.js                    # Xử lý Frontend, Instant Search, Sticky Nav, SSE log stream
 ├── src/                          # Mã nguồn Backend & Pulumi IaC
 │   ├── server.ts                 # Express Server & Pulumi Automation API Runner
-│   ├── proxmox-api.ts            # Proxmox REST API Client
+│   ├── proxmox-api.ts            # Proxmox REST API Client (Fetch Nodes, Storages, VMs, Disks)
 │   └── pulumi-program.ts         # Khai báo tài nguyên Pulumi cho VM Proxmox VE
 ├── .env.example                  # File mẫu cấu hình biến môi trường
 ├── package.json                  # Dependencies & Scripts
