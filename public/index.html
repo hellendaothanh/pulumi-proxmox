@@ -29,7 +29,7 @@
             <div class="nav-tabs">
                 <button class="nav-tab active" data-tab="tab-overview">
                     <i data-lucide="activity" class="btn-icon-sm"></i>
-                    <span>Tài Nguyên Cụm (Cluster)</span>
+                    <span>Tài Nguyên Cụm</span>
                 </button>
                 <button class="nav-tab" data-tab="tab-deploy">
                     <i data-lucide="plus-circle" class="btn-icon-sm"></i>
@@ -37,13 +37,27 @@
                 </button>
                 <button class="nav-tab" data-tab="tab-logs">
                     <i data-lucide="terminal" class="btn-icon-sm"></i>
-                    <span>Nhật Ký (Logs)</span>
+                    <span>Live Console</span>
+                </button>
+                <button class="nav-tab" data-tab="tab-audit">
+                    <i data-lucide="shield-check" class="btn-icon-sm"></i>
+                    <span>Audit Logs</span>
                 </button>
             </div>
 
-            <div class="header-status">
-                <span class="status-dot online"></span>
-                <span>Proxmox VE API Connected</span>
+            <!-- RBAC User Role Switcher -->
+            <div class="header-user-controls">
+                <div class="role-selector-wrapper">
+                    <i data-lucide="user-check" class="role-icon"></i>
+                    <select id="userRoleSelect" class="role-select" title="Chuyển đổi vai trò người dùng (RBAC Policy)">
+                        <option value="admin">👑 Admin (Toàn quyền)</option>
+                        <option value="developer">👨‍💻 Developer (Chỉ DEV)</option>
+                    </select>
+                </div>
+                <div class="header-status">
+                    <span class="status-dot online"></span>
+                    <span>Proxmox VE Connected</span>
+                </div>
             </div>
         </header>
 
@@ -294,6 +308,36 @@
                             <textarea id="sshPublicKey" name="sshPublicKey" rows="2" placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5..."></textarea>
                         </div>
 
+                        <!-- Post-provisioning Hooks & Cloud-Init User-Data -->
+                        <div class="form-group post-prov-box">
+                            <div class="label-with-value">
+                                <label for="userData">
+                                    <i data-lucide="code" class="field-icon"></i>
+                                    Tự Động Cấu Hình Sau Khởi Tạo (Post-provisioning Hooks)
+                                </label>
+                                <span class="badge-optional">Cloud-Init / Shell</span>
+                            </div>
+                            <div class="script-presets-bar">
+                                <span class="presets-label">Mẫu sẵn có:</span>
+                                <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('docker')">🐳 Docker & Compose</button>
+                                <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('nginx')">🌐 Nginx Web Server</button>
+                                <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('security')">🛡️ Hardening & UFW</button>
+                                <button type="button" class="btn-preset-chip btn-preset-clear" onclick="applyScriptPreset('clear')">✕ Xóa</button>
+                            </div>
+                            <textarea id="userData" name="userData" rows="5" class="code-textarea" placeholder="# Nhập Cloud-init user-data YAML hoặc Shell script bootstrap...
+#cloud-config
+packages:
+  - curl
+  - htop
+  - git
+runcmd:
+  - [ systemctl, start, nginx ]"></textarea>
+                            <div class="field-hint">
+                                <i data-lucide="info" style="width:12px;height:12px;display:inline;"></i>
+                                <span>Hỗ trợ định dạng <code>#cloud-config</code> YAML hoặc Script <code>#!/bin/bash</code> tự chạy khi máy ảo boot lần đầu.</span>
+                            </div>
+                        </div>
+
                         <div class="form-options">
                             <label class="checkbox-label">
                                 <input type="checkbox" id="upgrade" name="upgrade" checked>
@@ -381,6 +425,48 @@
                 </div>
             </section>
         </section>
+
+        <!-- TAB 4: AUDIT LOGS & GOVERNANCE -->
+        <section id="tab-audit" class="tab-content">
+            <section class="card">
+                <div class="card-header flex-between">
+                    <div>
+                        <div class="card-title-group">
+                            <i data-lucide="shield-check" class="icon-accent"></i>
+                            <h2>Nhật Ký Kiểm Toán (Audit Logs & Governance)</h2>
+                        </div>
+                        <p>Ghi vết chi tiết danh tính người dùng, vai trò (RBAC), hành động tạo/hủy stack và trạng thái phê duyệt</p>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button id="btnRefreshAudit" class="btn-secondary">
+                            <i data-lucide="refresh-cw" class="btn-icon-sm"></i>
+                            <span>Làm mới Audit Logs</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-responsive" style="margin-top: 10px;">
+                    <table class="vms-overview-table">
+                        <thead>
+                            <tr>
+                                <th style="min-width: 140px;">Thời Gian</th>
+                                <th style="min-width: 130px;">Người Dùng & Vai Trò</th>
+                                <th style="min-width: 150px;">Hành Động (Action)</th>
+                                <th style="min-width: 120px;">Mục Tiêu (Target)</th>
+                                <th style="min-width: 90px;">Môi Trường</th>
+                                <th style="min-width: 95px;">Trạng Thái</th>
+                                <th style="min-width: 200px;">Chi Tiết</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditTableBody">
+                            <tr>
+                                <td colspan="7" class="text-center text-muted" style="padding: 24px;">Đang tải nhật ký kiểm toán...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </section>
     </div>
 
     <!-- Modal Chi Tiết VM -->
@@ -397,6 +483,117 @@
             </div>
             <div id="modalVmBody" class="modal-body">
                 <!-- Rendered dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Web Console (noVNC) -->
+    <div id="consoleModal" class="modal-backdrop hidden">
+        <div class="modal-card modal-card-xl">
+            <div class="modal-header">
+                <div class="card-title-group">
+                    <i data-lucide="terminal" class="icon-accent"></i>
+                    <h3 id="consoleModalTitle">Web Console Máy Ảo</h3>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <a id="btnOpenExternalConsole" href="#" target="_blank" class="btn-action-sm" style="background: rgba(99, 102, 241, 0.25); color:#fff;" title="Mở Console trực tiếp trong Tab mới">
+                        <i data-lucide="external-link" class="btn-icon-sm"></i>
+                        <span>Mở Tab Mới</span>
+                    </a>
+                    <button id="btnCloseConsoleModal" class="btn-icon-close">
+                        <i data-lucide="x" class="btn-icon-sm"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-body console-modal-body">
+                <div class="console-auth-banner" id="consoleAuthBanner">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="shield-alert" style="width:18px;height:18px;color:#f59e0b;"></i>
+                            <span style="font-size:12.5px; color:#f8fafc;">
+                                <strong>Lưu ý xác thực Proxmox noVNC:</strong> Giao diện Console yêu cầu cookie phiên làm việc (Session Ticket) từ máy chủ Proxmox.
+                            </span>
+                        </div>
+                        <a id="btnProxmoxLoginLink" href="#" target="_blank" class="btn-preset-chip" style="white-space:nowrap; border-color:#818cf8; color:#a5b4fc;">
+                            🔑 Đăng Nhập Proxmox VE (1 Lần)
+                        </a>
+                    </div>
+                </div>
+                <div class="console-embed-container">
+                    <iframe id="consoleIframe" src="" frameborder="0" allowfullscreen></iframe>
+                </div>
+                <div class="console-footer-tip">
+                    <i data-lucide="info" style="width:14px;height:14px;color:#38bdf8;"></i>
+                    <span>Nếu màn hình hiển thị <code>401 No Ticket</code> hoặc bị trắng, vui lòng bấm <strong>"Đăng Nhập Proxmox VE"</strong> ở trên một lần (để trình duyệt nhận cookie PVEAuthCookie), sau đó bấm <strong>"Mở Tab Mới"</strong>.</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Quản Lý Snapshot -->
+    <div id="snapshotModal" class="modal-backdrop hidden">
+        <div class="modal-card modal-card-lg">
+            <div class="modal-header">
+                <div class="card-title-group">
+                    <i data-lucide="camera" class="icon-accent"></i>
+                    <h3 id="snapshotModalTitle">Quản Lý Snapshot Máy Ảo</h3>
+                </div>
+                <button id="btnCloseSnapshotModal" class="btn-icon-close">
+                    <i data-lucide="x" class="btn-icon-sm"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Form Tạo Snapshot Mới -->
+                <div class="snapshot-create-box">
+                    <div class="sub-section-title" style="margin-bottom:10px;">
+                        <i data-lucide="plus-circle" class="field-icon"></i>
+                        <span>Tạo Snapshot Mới</span>
+                    </div>
+                    <form id="formCreateSnapshot" class="form-grid-2col">
+                        <div class="form-group">
+                            <label class="form-label" for="snapNameInput">Tên Snapshot <span class="text-danger">*</span></label>
+                            <input type="text" id="snapNameInput" class="form-input" placeholder="vd: pre-upgrade, backup-v1" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="snapDescInput">Mô Tả / Ghi Chú</label>
+                            <input type="text" id="snapDescInput" class="form-input" placeholder="Ghi chú cấu hình trước thay đổi...">
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1; display:flex; justify-content:space-between; align-items:center;">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="snapVmStateInput">
+                                <span>Lưu trạng thái RAM (RAM State - chỉ khi VM đang chạy)</span>
+                            </label>
+                            <button type="submit" id="btnSubmitSnapshot" class="btn-primary" style="width: auto; padding: 8px 16px;">
+                                <i data-lucide="camera" class="btn-icon-sm"></i>
+                                <span>Tạo Snapshot</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Danh sách Snapshots -->
+                <div class="sub-section-title" style="margin: 18px 0 10px 0;">
+                    <i data-lucide="history" class="field-icon"></i>
+                    <span>Danh Sách Bản Snapshot Đã Tạo</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="vms-overview-table">
+                        <thead>
+                            <tr>
+                                <th>Tên Snapshot</th>
+                                <th>Thời Gian</th>
+                                <th>Mô Tả</th>
+                                <th>RAM State</th>
+                                <th class="text-right">Thao Tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="snapshotListBody">
+                            <tr>
+                                <td colspan="5" class="text-center text-muted" style="padding: 20px;">Đang tải danh sách snapshot...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

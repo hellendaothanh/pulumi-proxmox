@@ -19,6 +19,7 @@ export interface VmConfig {
     tags?: string[];
     upgrade?: boolean;
     protection?: boolean;
+    userData?: string; // Custom Cloud-init User-Data Script / Post-provisioning Bootstrap
 }
 
 export function createVmProgram(config: VmConfig) {
@@ -41,6 +42,30 @@ export function createVmProgram(config: VmConfig) {
         const customTags = (config.tags || []).map(t => t.toLowerCase().trim()).filter(Boolean);
         const combinedTags = Array.from(new Set([...envTag, ...customTags]));
 
+        // Chuẩn bị Custom User Data / Post-provisioning bootstrap script
+        let customUserDataFile: proxmox.storage.File | undefined = undefined;
+        let userDataFileId: pulumi.Input<string> | undefined = undefined;
+
+        if (config.userData && config.userData.trim().length > 0) {
+            let userDataContent = config.userData.trim();
+            // Đảm bảo có header #cloud-config hoặc #!/bin/bash
+            if (!userDataContent.startsWith("#cloud-config") && !userDataContent.startsWith("#!/")) {
+                userDataContent = `#cloud-config\n${userDataContent}`;
+            }
+
+            customUserDataFile = new proxmox.storage.File(`userdata-${config.name.toLowerCase()}`, {
+                nodeName: config.nodeName,
+                datastoreId: "local", // snippets thường lưu tại datastore 'local'
+                contentType: "snippets",
+                sourceRaw: {
+                    data: userDataContent,
+                    fileName: `user-data-${config.name.toLowerCase()}.yaml`,
+                },
+            }, { provider });
+
+            userDataFileId = customUserDataFile.id;
+        }
+
         const vm = new proxmox.VmLegacy(config.name, {
             nodeName: config.nodeName,
             name: config.name,
@@ -48,10 +73,11 @@ export function createVmProgram(config: VmConfig) {
             machine: "q35",
             protection: isProtected,
             tags: combinedTags.length > 0 ? combinedTags : undefined,
-            hotplug: "network,disk,usb,memory,cpu",
+            hotplug: "network,disk,usb",
             cpu: {
                 cores: config.cores,
                 type: config.cpuType || "host",
+                numa: true,
             },
             memory: {
                 dedicated: config.memoryMb,
@@ -81,6 +107,7 @@ export function createVmProgram(config: VmConfig) {
                     username: config.sshUser || "root",
                     keys: config.sshPublicKey ? [config.sshPublicKey] : undefined,
                 },
+                userDataFileId: userDataFileId,
                 upgrade: config.upgrade ?? true,
             },
             networkDevices: [
@@ -98,7 +125,7 @@ export function createVmProgram(config: VmConfig) {
                 timeout: "15s",
             },
             started: true,
-        }, { provider });
+        }, { provider, dependsOn: customUserDataFile ? [customUserDataFile] : undefined });
 
         return {
             vmId: vm.vmId,
@@ -108,6 +135,7 @@ export function createVmProgram(config: VmConfig) {
             tags: combinedTags,
             vlanTag: config.vlanTag || undefined,
             protection: isProtected,
+            hasUserData: !!config.userData,
             status: "running",
         };
     };

@@ -15,6 +15,46 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "../public")));
 
+// ==========================================
+// AUDIT LOGS & RBAC GOVERNANCE
+// ==========================================
+export interface AuditLogEntry {
+    id: string;
+    timestamp: string;
+    username: string;
+    role: "admin" | "developer" | "viewer" | string;
+    action: string;
+    target: string;
+    environment?: string;
+    status: "SUCCESS" | "DENIED" | "FAILED";
+    details?: string;
+    ip?: string;
+}
+
+const auditLogs: AuditLogEntry[] = [
+    {
+        id: "audit-init",
+        timestamp: new Date().toISOString(),
+        username: "system",
+        role: "admin",
+        action: "SYSTEM_INIT",
+        target: "Proxmox Cluster",
+        status: "SUCCESS",
+        details: "Hệ thống Governance & Audit Logs khởi động thành công"
+    }
+];
+
+function recordAuditLog(entry: Omit<AuditLogEntry, "id" | "timestamp">) {
+    const newLog: AuditLogEntry = {
+        id: `audit-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        timestamp: new Date().toISOString(),
+        ...entry
+    };
+    auditLogs.unshift(newLog);
+    if (auditLogs.length > 500) auditLogs.pop(); // Giới hạn 500 bản ghi gần nhất
+    return newLog;
+}
+
 // Quản lý SSE clients để stream logs theo thời gian thực
 type LogListener = (data: string) => void;
 const logListeners = new Set<LogListener>();
@@ -24,6 +64,11 @@ function broadcastLog(message: string) {
         listener(message);
     }
 }
+
+// Endpoint lấy danh sách Audit Logs
+app.get("/api/audit-logs", (req, res) => {
+    res.json({ success: true, data: auditLogs });
+});
 
 // Endpoint SSE stream logs
 app.get("/api/logs/stream", (req, res) => {
@@ -216,11 +261,35 @@ async function resolveDatastoreForNode(nodeName: string, preferredDatastore?: st
 
 // Endpoint tạo 1 VM hoặc Cụm nhiều VM
 app.post("/api/vms", async (req, res) => {
+    const userRole = (req.headers["x-user-role"] as string) || "admin";
+    const userName = (req.headers["x-user-name"] as string) || (userRole === "admin" ? "admin" : "developer");
     const body = req.body;
     const vms: VmConfig[] = Array.isArray(body.vms) ? body.vms : [body];
 
     if (!vms || vms.length === 0) {
         return res.status(400).json({ success: false, error: "Danh sách VM rỗng." });
+    }
+
+    // RBAC Check: Developer chỉ được phép tạo trên môi trường DEV
+    if (userRole === "developer") {
+        for (const vm of vms) {
+            const env = (vm.environment || "dev").toLowerCase();
+            if (env !== "dev") {
+                recordAuditLog({
+                    username: userName,
+                    role: userRole,
+                    action: "CREATE_VM_DENIED",
+                    target: vm.name,
+                    environment: env,
+                    status: "DENIED",
+                    details: `Developer '${userName}' bị từ chối tạo VM trên môi trường '${env.toUpperCase()}'. Chỉ Admin mới có quyền thao tác trên STAGING/PROD.`
+                });
+                return res.status(403).json({
+                    success: false,
+                    error: `[RBAC DENIED] Bạn đang đăng nhập với quyền Developer. Developer chỉ được phép triển khai máy ảo trên môi trường DEV (Môi trường yêu cầu: ${env.toUpperCase()}).`
+                });
+            }
+        }
     }
 
     for (const vm of vms) {
@@ -232,10 +301,21 @@ app.post("/api/vms", async (req, res) => {
     const isBatch = vms.length > 1;
     const stackNames = vms.map(v => `vm-${v.name.toLowerCase().replace(/[^a-z0-9-_]/g, "-")}`);
 
+    // Ghi Audit Log bắt đầu tạo VM
+    recordAuditLog({
+        username: userName,
+        role: userRole,
+        action: isBatch ? "BATCH_CREATE_VM" : "CREATE_VM",
+        target: vms.map(v => v.name).join(", "),
+        environment: vms[0].environment || "dev",
+        status: "SUCCESS",
+        details: `Khởi tạo ${vms.length} máy ảo trên Node [${Array.from(new Set(vms.map(v => v.nodeName))).join(", ")}]`
+    });
+
     if (isBatch) {
-        broadcastLog(`\n[CLUSTER] Bắt đầu khởi tạo cụm ${vms.length} máy ảo: ${vms.map(v => `${v.name} (@${v.nodeName})`).join(", ")}...`);
+        broadcastLog(`\n[CLUSTER] [User: ${userName} (${userRole.toUpperCase()})] Bắt đầu khởi tạo cụm ${vms.length} máy ảo: ${vms.map(v => `${v.name} (@${v.nodeName})`).join(", ")}...`);
     } else {
-        broadcastLog(`\n[CREATE] Bắt đầu khởi tạo stack '${stackNames[0]}' cho máy ảo ${vms[0].name}...`);
+        broadcastLog(`\n[CREATE] [User: ${userName} (${userRole.toUpperCase()})] Bắt đầu khởi tạo stack '${stackNames[0]}' cho máy ảo ${vms[0].name}...`);
     }
 
     // Chạy tiến trình triển khai bất đồng bộ tuần tự
@@ -258,38 +338,45 @@ app.post("/api/vms", async (req, res) => {
                     program,
                 });
 
+                await stack.setConfig("proxmox:endpoint", { value: process.env.PROXMOX_VE_ENDPOINT || "" });
+                await stack.setConfig("proxmox:apiToken", { value: process.env.PROXMOX_VE_API_TOKEN || "", secret: true });
+                await stack.setConfig("proxmox:insecure", { value: process.env.PROXMOX_VE_INSECURE || "true" });
+
                 const logHandler = createLogStreamHandler("Updating");
 
-                const result = await stack.up({ onOutput: logHandler });
+                const upResult = await stack.up({
+                    onOutput: logHandler,
+                });
+
                 broadcastLog(`PROGRESS_END:Updating`);
-                broadcastLog(`[SUCCESS] ${prefix} Triển khai thành công VM ${config.name} trên Node ${config.nodeName}! Outputs: ${JSON.stringify(result.outputs)}`);
+                broadcastLog(`✅ ${prefix} Triển khai thành công! VM ID: ${upResult.outputs.vmId?.value || 'N/A'}`);
             } catch (err: any) {
                 broadcastLog(`PROGRESS_END:Updating`);
-                broadcastLog(`[ERROR] ${prefix} Lỗi khi tạo VM ${config.name}: ${err.message}`);
+                broadcastLog(`❌ [ERROR] ${prefix} Thất bại: ${err.message}`);
             }
-        }
-
-        if (isBatch) {
-            broadcastLog(`\n[DONE] Đã hoàn tất chu trình triển khai cho toàn bộ cụm ${vms.length} máy ảo!`);
         }
     })();
 
     res.json({
         success: true,
         message: isBatch 
-            ? `Đã tiếp nhận yêu cầu khởi tạo cụm ${vms.length} máy ảo. Quá trình đang diễn ra...`
-            : `Đã tiếp nhận yêu cầu tạo VM '${vms[0].name}'. Quá trình đang diễn ra...`,
-        count: vms.length,
-        stackNames,
+            ? `Đã nhận yêu cầu khởi tạo cụm ${vms.length} máy ảo. Tiến trình đang chạy ngầm...` 
+            : `Đã nhận yêu cầu khởi tạo stack '${stackNames[0]}'. Tiến trình đang chạy ngầm...`,
+        data: {
+            stacks: stackNames,
+            vms: vms.map(v => v.name),
+        }
     });
 });
 
 // Endpoint xóa VM (kiểm tra protection)
 app.delete("/api/vms/:stackName", async (req, res) => {
+    const userRole = (req.headers["x-user-role"] as string) || "admin";
+    const userName = (req.headers["x-user-name"] as string) || (userRole === "admin" ? "admin" : "developer");
     const { stackName } = req.params;
     const force = req.query.force === "true";
 
-    broadcastLog(`\n[DESTROY] Bắt đầu xử lý xóa stack '${stackName}'...`);
+    broadcastLog(`\n[DESTROY] [User: ${userName} (${userRole.toUpperCase()})] Bắt đầu xử lý xóa stack '${stackName}'...`);
 
     try {
         const stack = await LocalWorkspace.selectStack({
@@ -298,10 +385,28 @@ app.delete("/api/vms/:stackName", async (req, res) => {
             program: async () => {},
         });
 
-        // Kiểm tra xem VM có đang bật Protection không
+        // Kiểm tra outputs của VM
         const outputs = await stack.outputs();
         const nodeName = outputs.nodeName?.value;
         const vmId = outputs.vmId?.value;
+        const environment = (outputs.environment?.value || "dev").toLowerCase();
+
+        // RBAC Check: Developer chỉ được phép xóa trên môi trường DEV
+        if (userRole === "developer" && environment !== "dev") {
+            recordAuditLog({
+                username: userName,
+                role: userRole,
+                action: "DELETE_VM_DENIED",
+                target: stackName,
+                environment: environment,
+                status: "DENIED",
+                details: `Developer '${userName}' bị từ chối xóa stack '${stackName}' trên môi trường '${environment.toUpperCase()}'. Chỉ Admin mới có quyền xóa tài nguyên STAGING/PROD.`
+            });
+            return res.status(403).json({
+                success: false,
+                error: `[RBAC DENIED] Bạn đang đăng nhập với quyền Developer. Không được phép xóa máy ảo trên môi trường '${environment.toUpperCase()}'.`
+            });
+        }
 
         let isProtected = false;
         if (nodeName && vmId) {
@@ -327,6 +432,16 @@ app.delete("/api/vms/:stackName", async (req, res) => {
             });
         }
 
+        recordAuditLog({
+            username: userName,
+            role: userRole,
+            action: "DELETE_VM",
+            target: stackName,
+            environment: environment,
+            status: "SUCCESS",
+            details: `Tiến hành hủy hoàn toàn VM và stack '${stackName}' (VM ID: ${vmId || 'N/A'})`
+        });
+
         const logHandler = createLogStreamHandler("Destroying");
 
         stack.destroy({
@@ -350,6 +465,147 @@ app.delete("/api/vms/:stackName", async (req, res) => {
         });
     } catch (error: any) {
         broadcastLog(`❌ [ERROR] Không tìm thấy stack ${stackName}: ${error.message}`);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ==========================================
+// VM LIFECYCLE MANAGEMENT API (Power, Snapshots, Console)
+// ==========================================
+
+// 1. Thao tác nguồn VM (start, stop, shutdown, reset, reboot)
+app.post("/api/nodes/:node/vms/:vmid/power", async (req, res) => {
+    const { node, vmid } = req.params;
+    const { action } = req.body; // "start" | "stop" | "shutdown" | "reset" | "reboot"
+
+    if (!["start", "stop", "shutdown", "reset", "reboot"].includes(action)) {
+        return res.status(400).json({ success: false, error: "Hành động nguồn không hợp lệ." });
+    }
+
+    try {
+        let task: any = null;
+        let actionLabel = "";
+
+        switch (action) {
+            case "start":
+                actionLabel = "Khởi động (Start)";
+                task = await proxmoxClient.vmStart(node, vmid);
+                break;
+            case "stop":
+                actionLabel = "Tắt nóng / Force Stop";
+                task = await proxmoxClient.vmStop(node, vmid);
+                break;
+            case "shutdown":
+                actionLabel = "Tắt nguồn an toàn (ACPI Shutdown)";
+                task = await proxmoxClient.vmShutdown(node, vmid);
+                break;
+            case "reset":
+                actionLabel = "Reset cưỡng bức (Force Reset)";
+                task = await proxmoxClient.vmReset(node, vmid);
+                break;
+            case "reboot":
+                actionLabel = "Khởi động lại (Reboot)";
+                task = await proxmoxClient.vmReboot(node, vmid);
+                break;
+        }
+
+        broadcastLog(`⚡ [POWER] Đã gửi lệnh ${actionLabel} tới VM #${vmid} trên Node '${node}' (Task ID: ${task || 'OK'})`);
+        res.json({ success: true, message: `Lệnh ${actionLabel} đã được gửi thành công.`, data: task });
+    } catch (error: any) {
+        broadcastLog(`❌ [POWER ERROR] Lỗi khi thực hiện lệnh nguồn '${action}' cho VM #${vmid}: ${error.message}`);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 2. Danh sách Snapshot của VM
+app.get("/api/nodes/:node/vms/:vmid/snapshots", async (req, res) => {
+    const { node, vmid } = req.params;
+    try {
+        const snapshots = await proxmoxClient.getVmSnapshots(node, vmid);
+        res.json({ success: true, data: snapshots });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 3. Tạo Snapshot mới cho VM
+app.post("/api/nodes/:node/vms/:vmid/snapshots", async (req, res) => {
+    const { node, vmid } = req.params;
+    const { snapname, description, vmstate } = req.body;
+
+    if (!snapname) {
+        return res.status(400).json({ success: false, error: "Tên Snapshot là bắt buộc." });
+    }
+
+    try {
+        broadcastLog(`📸 [SNAPSHOT] Đang tạo snapshot '${snapname}' cho VM #${vmid} trên Node '${node}'...`);
+        const result = await proxmoxClient.createVmSnapshot(node, vmid, snapname, description, !!vmstate);
+        broadcastLog(`✅ [SNAPSHOT] Tạo snapshot '${snapname}' cho VM #${vmid} hoàn tất!`);
+        res.json({ success: true, message: `Đã tạo snapshot '${snapname}' thành công.`, data: result });
+    } catch (error: any) {
+        broadcastLog(`❌ [SNAPSHOT ERROR] Lỗi khi tạo snapshot '${snapname}': ${error.message}`);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 4. Khôi phục (Rollback) Snapshot
+app.post("/api/nodes/:node/vms/:vmid/snapshots/:snapname/rollback", async (req, res) => {
+    const { node, vmid, snapname } = req.params;
+    try {
+        broadcastLog(`🔄 [SNAPSHOT] Đang khôi phục VM #${vmid} về snapshot '${snapname}'...`);
+        const result = await proxmoxClient.rollbackVmSnapshot(node, vmid, snapname);
+        broadcastLog(`✅ [SNAPSHOT] Đã khôi phục VM #${vmid} về snapshot '${snapname}' thành công!`);
+        res.json({ success: true, message: `Đã khôi phục về snapshot '${snapname}' thành công.`, data: result });
+    } catch (error: any) {
+        broadcastLog(`❌ [SNAPSHOT ERROR] Lỗi khi rollback snapshot '${snapname}': ${error.message}`);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 5. Xóa Snapshot
+app.delete("/api/nodes/:node/vms/:vmid/snapshots/:snapname", async (req, res) => {
+    const { node, vmid, snapname } = req.params;
+    try {
+        broadcastLog(`🗑️ [SNAPSHOT] Đang xóa snapshot '${snapname}' của VM #${vmid}...`);
+        const result = await proxmoxClient.deleteVmSnapshot(node, vmid, snapname);
+        broadcastLog(`✅ [SNAPSHOT] Đã xóa snapshot '${snapname}' của VM #${vmid} hoàn tất!`);
+        res.json({ success: true, message: `Đã xóa snapshot '${snapname}' thành công.`, data: result });
+    } catch (error: any) {
+        broadcastLog(`❌ [SNAPSHOT ERROR] Lỗi khi xóa snapshot '${snapname}': ${error.message}`);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 6. Lấy Web Console URL & noVNC ticket
+app.get("/api/nodes/:node/vms/:vmid/console", async (req, res) => {
+    const { node, vmid } = req.params;
+    try {
+        const consoleUrl = proxmoxClient.getDirectConsoleUrl(node, vmid);
+        let vncData = null;
+        let authTicket = null;
+
+        try {
+            [vncData, authTicket] = await Promise.all([
+                proxmoxClient.getVncTicket(node, vmid),
+                proxmoxClient.createAuthTicket()
+            ]);
+        } catch {
+            // fallback
+        }
+
+        // Endpoint Proxmox VE gốc
+        const proxmoxHost = (process.env.PROXMOX_VE_ENDPOINT || "").replace(/\/$/, "");
+
+        res.json({
+            success: true,
+            data: {
+                consoleUrl,
+                proxmoxHost,
+                vncData,
+                authTicket: authTicket ? { ticket: authTicket.ticket, CSRFPreventionToken: authTicket.CSRFPreventionToken } : null
+            }
+        });
+    } catch (error: any) {
         res.status(500).json({ success: false, error: error.message });
     }
 });

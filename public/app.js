@@ -4,6 +4,42 @@ document.addEventListener("DOMContentLoaded", () => {
         window.lucide.createIcons();
     }
 
+    // ==========================================
+    // RBAC ROLE MANAGEMENT & TAB SWITCHING
+    // ==========================================
+    const userRoleSelect = document.getElementById("userRoleSelect");
+    let currentUserRole = localStorage.getItem("pulumi_user_role") || "admin";
+
+    if (userRoleSelect) {
+        userRoleSelect.value = currentUserRole;
+        userRoleSelect.addEventListener("change", (e) => {
+            currentUserRole = e.target.value;
+            localStorage.setItem("pulumi_user_role", currentUserRole);
+            showToast(`Đã chuyển vai trò: ${currentUserRole === 'admin' ? '👑 Administrator' : '👨‍💻 Developer'}`);
+            applyRbacUiRestrictions();
+            loadAuditLogs();
+        });
+    }
+
+    function applyRbacUiRestrictions() {
+        const envRadios = document.querySelectorAll("input[name='environment']");
+        const isDevOnly = currentUserRole === "developer";
+
+        envRadios.forEach(r => {
+            if (isDevOnly) {
+                if (r.value !== "dev") {
+                    r.disabled = true;
+                    r.closest(".env-option-card")?.classList.add("disabled-option");
+                } else {
+                    r.checked = true;
+                }
+            } else {
+                r.disabled = false;
+                r.closest(".env-option-card")?.classList.remove("disabled-option");
+            }
+        });
+    }
+
     // Tabs Navigation
     const tabs = document.querySelectorAll(".nav-tab");
     const tabContents = document.querySelectorAll(".tab-content");
@@ -24,6 +60,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     loadClusterResources();
                 }
                 loadVms();
+                applyRbacUiRestrictions();
+            } else if (targetId === "tab-audit") {
+                loadAuditLogs();
             }
             if (window.lucide) window.lucide.createIcons();
         });
@@ -416,11 +455,33 @@ document.addEventListener("DOMContentLoaded", () => {
                             <span class="spec-pill"><i data-lucide="layers" class="spec-icon"></i> ${formatBytes(vm.maxmem)}</span>
                             <span class="spec-pill"><i data-lucide="hard-drive" class="spec-icon"></i> ${getVmDiskSize(vm)}</span>
                         </td>
-                        <td class="text-right">
-                            <button class="btn-action-sm" onclick="showVmDetail('${node.node}', ${vm.vmid})" title="Xem cấu hình Proxmox">
-                                <i data-lucide="eye" class="btn-icon-sm"></i>
-                                <span>Chi tiết</span>
-                            </button>
+                        <td class="text-right vm-actions-cell">
+                            <div class="vm-action-btn-group">
+                                ${isRunning ? `
+                                    <button class="btn-power-op btn-power-reboot" onclick="triggerVmPower('${node.node}', ${vm.vmid}, 'reboot')" title="Khởi động lại an toàn (Reboot)">
+                                        <i data-lucide="rotate-cw" class="action-icon-xs"></i>
+                                    </button>
+                                    <button class="btn-power-op btn-power-stop" onclick="triggerVmPower('${node.node}', ${vm.vmid}, 'shutdown')" title="Tắt nguồn an toàn (ACPI Shutdown)">
+                                        <i data-lucide="power" class="action-icon-xs"></i>
+                                    </button>
+                                ` : `
+                                    <button class="btn-power-op btn-power-start" onclick="triggerVmPower('${node.node}', ${vm.vmid}, 'start')" title="Bật nguồn máy ảo (Start)">
+                                        <i data-lucide="play" class="action-icon-xs"></i>
+                                    </button>
+                                `}
+                                <button class="btn-action-sm btn-action-console" onclick="openVmConsole('${node.node}', ${vm.vmid}, '${vm.name}')" title="Mở Web Console (noVNC)">
+                                    <i data-lucide="terminal" class="btn-icon-sm"></i>
+                                    <span>Console</span>
+                                </button>
+                                <button class="btn-action-sm btn-action-snap" onclick="openVmSnapshots('${node.node}', ${vm.vmid}, '${vm.name}')" title="Quản lý Snapshots">
+                                    <i data-lucide="camera" class="btn-icon-sm"></i>
+                                    <span>Snapshot</span>
+                                </button>
+                                <button class="btn-action-sm" onclick="showVmDetail('${node.node}', ${vm.vmid})" title="Xem cấu hình Proxmox">
+                                    <i data-lucide="eye" class="btn-icon-sm"></i>
+                                    <span>Chi tiết</span>
+                                </button>
+                            </div>
                         </td>
                     </tr>
                 `;
@@ -492,7 +553,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                                 <th style="min-width: 95px;">Trạng Thái</th>
                                                 <th style="min-width: 120px;">Địa Chỉ IP</th>
                                                 <th style="min-width: 130px;">Cấu Hình</th>
-                                                <th class="text-right" style="min-width: 70px;">Thao Tác</th>
+                                                <th class="text-right" style="min-width: 220px;">Thao Tác</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -738,6 +799,270 @@ document.addEventListener("DOMContentLoaded", () => {
 
         vmModal.classList.remove("hidden");
         if (window.lucide) window.lucide.createIcons();
+    };
+
+    // ==========================================
+    // VM LIFECYCLE CONTROLS (POWER, CONSOLE, SNAPSHOTS)
+    // ==========================================
+
+    // 1. Thao tác nguồn VM (Start, Stop, Shutdown, Reboot, Reset)
+    window.triggerVmPower = async (nodeName, vmid, action) => {
+        let actionLabel = "thao tác nguồn";
+        if (action === "start") actionLabel = "Bật nguồn (Start)";
+        if (action === "shutdown") actionLabel = "Tắt nguồn an toàn (ACPI Shutdown)";
+        if (action === "stop") actionLabel = "Tắt nóng (Force Stop)";
+        if (action === "reboot") actionLabel = "Khởi động lại (Reboot)";
+        if (action === "reset") actionLabel = "Reset cưỡng bức (Force Reset)";
+
+        if (action === "stop" || action === "reset") {
+            if (!confirm(`⚠️ Bạn có chắc muốn thực hiện ${actionLabel} cho VM #${vmid} không? Thao tác tắt đột ngột có thể làm mất dữ liệu chưa lưu!`)) {
+                return;
+            }
+        }
+
+        showToast(`⚡ Đang gửi lệnh ${actionLabel} tới VM #${vmid}...`);
+
+        try {
+            const res = await fetch(`/api/nodes/${nodeName}/vms/${vmid}/power`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast(`✅ Đã gửi lệnh ${actionLabel} thành công!`);
+                // Tự động tải lại sau 2.5s để cập nhật trạng thái
+                setTimeout(() => {
+                    if (typeof loadClusterResources === "function") loadClusterResources();
+                }, 2500);
+            } else {
+                alert(`Lỗi thao tác nguồn: ${data.error || "Không rõ nguyên nhân"}`);
+            }
+        } catch (err) {
+            alert(`Lỗi kết nối tới Server: ${err.message}`);
+        }
+    };
+
+    // 2. Web Console (noVNC / xterm.js)
+    const consoleModal = document.getElementById("consoleModal");
+    const btnCloseConsoleModal = document.getElementById("btnCloseConsoleModal");
+    const consoleModalTitle = document.getElementById("consoleModalTitle");
+    const consoleIframe = document.getElementById("consoleIframe");
+    const btnOpenExternalConsole = document.getElementById("btnOpenExternalConsole");
+    const btnProxmoxLoginLink = document.getElementById("btnProxmoxLoginLink");
+
+    if (btnCloseConsoleModal && consoleModal) {
+        btnCloseConsoleModal.addEventListener("click", () => {
+            consoleModal.classList.add("hidden");
+            if (consoleIframe) consoleIframe.src = "";
+        });
+        consoleModal.addEventListener("click", (e) => {
+            if (e.target === consoleModal) {
+                consoleModal.classList.add("hidden");
+                if (consoleIframe) consoleIframe.src = "";
+            }
+        });
+    }
+
+    window.openVmConsole = async (nodeName, vmid, vmName) => {
+        if (!consoleModal || !consoleIframe) return;
+        consoleModalTitle.textContent = `Web Console: ${vmName || 'VM'} (#${vmid}) @ ${nodeName}`;
+        
+        try {
+            const res = await fetch(`/api/nodes/${nodeName}/vms/${vmid}/console`);
+            const data = await res.json();
+            if (data.success && data.data?.consoleUrl) {
+                const consoleUrl = data.data.consoleUrl;
+                const proxmoxHost = data.data.proxmoxHost;
+
+                if (btnProxmoxLoginLink && proxmoxHost) {
+                    btnProxmoxLoginLink.href = proxmoxHost;
+                }
+
+                if (btnOpenExternalConsole) {
+                    btnOpenExternalConsole.href = consoleUrl;
+                }
+
+                consoleIframe.src = consoleUrl;
+                consoleModal.classList.remove("hidden");
+                if (window.lucide) window.lucide.createIcons();
+            } else {
+                alert("Không lấy được URL console của máy ảo.");
+            }
+        } catch (err) {
+            alert(`Lỗi khi mở Console: ${err.message}`);
+        }
+    };
+
+    // 3. Quản Lý Snapshot Máy Ảo
+    const snapshotModal = document.getElementById("snapshotModal");
+    const btnCloseSnapshotModal = document.getElementById("btnCloseSnapshotModal");
+    const snapshotModalTitle = document.getElementById("snapshotModalTitle");
+    const formCreateSnapshot = document.getElementById("formCreateSnapshot");
+    const snapNameInput = document.getElementById("snapNameInput");
+    const snapDescInput = document.getElementById("snapDescInput");
+    const snapVmStateInput = document.getElementById("snapVmStateInput");
+    const snapshotListBody = document.getElementById("snapshotListBody");
+
+    let currentSnapshotVm = { node: "", vmid: 0, name: "" };
+
+    if (btnCloseSnapshotModal && snapshotModal) {
+        btnCloseSnapshotModal.addEventListener("click", () => snapshotModal.classList.add("hidden"));
+        snapshotModal.addEventListener("click", (e) => {
+            if (e.target === snapshotModal) snapshotModal.classList.add("hidden");
+        });
+    }
+
+    window.openVmSnapshots = async (nodeName, vmid, vmName) => {
+        if (!snapshotModal) return;
+        currentSnapshotVm = { node: nodeName, vmid: Number(vmid), name: vmName };
+        snapshotModalTitle.textContent = `Snapshots: ${vmName || 'VM'} (#${vmid}) @ ${nodeName}`;
+        
+        // Reset form
+        if (snapNameInput) snapNameInput.value = `snap-${Date.now().toString().slice(-6)}`;
+        if (snapDescInput) snapDescInput.value = "";
+        if (snapVmStateInput) snapVmStateInput.checked = false;
+
+        snapshotModal.classList.remove("hidden");
+        if (window.lucide) window.lucide.createIcons();
+        await loadVmSnapshots();
+    };
+
+    async function loadVmSnapshots() {
+        if (!snapshotListBody || !currentSnapshotVm.node || !currentSnapshotVm.vmid) return;
+        snapshotListBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted" style="padding: 20px;">Đang tải danh sách snapshot...</td></tr>`;
+
+        try {
+            const res = await fetch(`/api/nodes/${currentSnapshotVm.node}/vms/${currentSnapshotVm.vmid}/snapshots`);
+            const data = await res.json();
+
+            if (!data.success || !Array.isArray(data.data) || data.data.length === 0) {
+                snapshotListBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted" style="padding: 20px;">Chưa có bản snapshot nào.</td></tr>`;
+                return;
+            }
+
+            // Lọc các snapshot hợp lệ (bỏ qua 'current')
+            const validSnaps = data.data.filter(s => s.name && s.name !== "current");
+            if (validSnaps.length === 0) {
+                snapshotListBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted" style="padding: 20px;">Chưa có bản snapshot nào.</td></tr>`;
+                return;
+            }
+
+            snapshotListBody.innerHTML = validSnaps.map(snap => {
+                const snapTime = snap.snaptime ? new Date(snap.snaptime * 1000).toLocaleString() : "-";
+                const isCurrent = snap.current === 1;
+                return `
+                    <tr>
+                        <td>
+                            <strong style="color:#f8fafc;">${snap.name}</strong>
+                            ${isCurrent ? '<span class="tag-deployed" style="margin-left:6px;">Hiện Tại</span>' : ''}
+                        </td>
+                        <td style="font-family:'JetBrains Mono',monospace; font-size:11.5px; color:#cbd5e1;">${snapTime}</td>
+                        <td class="text-muted" style="font-size:12px;">${snap.description || "(Không có mô tả)"}</td>
+                        <td>${snap.vmstate ? '<span class="tag-env tag-env-pro">Có RAM</span>' : '<span class="text-muted" style="font-size:11px;">Không</span>'}</td>
+                        <td class="text-right">
+                            <div style="display:inline-flex; gap:6px;">
+                                <button class="btn-action-sm" onclick="rollbackVmSnapshot('${snap.name}')" title="Khôi phục máy ảo về bản snapshot này">
+                                    <i data-lucide="rotate-ccw" class="btn-icon-sm"></i>
+                                    <span>Khôi phục</span>
+                                </button>
+                                <button class="btn-danger-sm" onclick="deleteVmSnapshot('${snap.name}')" title="Xóa snapshot này">
+                                    <i data-lucide="trash-2" class="btn-icon-sm"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join("");
+
+            if (window.lucide) window.lucide.createIcons();
+        } catch (err) {
+            snapshotListBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger" style="padding: 20px;">Lỗi tải snapshot: ${err.message}</td></tr>`;
+        }
+    }
+
+    if (formCreateSnapshot) {
+        formCreateSnapshot.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const snapname = snapNameInput.value.trim();
+            const description = snapDescInput.value.trim();
+            const vmstate = snapVmStateInput.checked;
+
+            if (!snapname) {
+                alert("Vui lòng nhập tên Snapshot!");
+                return;
+            }
+
+            const btnSubmit = document.getElementById("btnSubmitSnapshot");
+            if (btnSubmit) btnSubmit.disabled = true;
+            showToast(`📸 Đang tạo snapshot '${snapname}'...`);
+
+            try {
+                const res = await fetch(`/api/nodes/${currentSnapshotVm.node}/vms/${currentSnapshotVm.vmid}/snapshots`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ snapname, description, vmstate })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`✅ Tạo snapshot '${snapname}' thành công!`);
+                    if (snapNameInput) snapNameInput.value = `snap-${Date.now().toString().slice(-6)}`;
+                    if (snapDescInput) snapDescInput.value = "";
+                    await loadVmSnapshots();
+                } else {
+                    alert(`Lỗi tạo snapshot: ${data.error || "Không rõ nguyên nhân"}`);
+                }
+            } catch (err) {
+                alert(`Lỗi kết nối: ${err.message}`);
+            } finally {
+                if (btnSubmit) btnSubmit.disabled = false;
+            }
+        });
+    }
+
+    window.rollbackVmSnapshot = async (snapname) => {
+        if (!confirm(`🔄 Bạn có chắc muốn KHÔI PHỤC máy ảo về bản snapshot '${snapname}' không? Các thay đổi sau thời điểm snapshot sẽ bị đảo ngược!`)) {
+            return;
+        }
+
+        showToast(`🔄 Đang khôi phục về snapshot '${snapname}'...`);
+        try {
+            const res = await fetch(`/api/nodes/${currentSnapshotVm.node}/vms/${currentSnapshotVm.vmid}/snapshots/${snapname}/rollback`, {
+                method: "POST"
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast(`✅ Đã khôi phục về snapshot '${snapname}' thành công!`);
+                await loadVmSnapshots();
+                if (typeof loadClusterResources === "function") loadClusterResources();
+            } else {
+                alert(`Lỗi khôi phục snapshot: ${data.error || "Không rõ nguyên nhân"}`);
+            }
+        } catch (err) {
+            alert(`Lỗi kết nối: ${err.message}`);
+        }
+    };
+
+    window.deleteVmSnapshot = async (snapname) => {
+        if (!confirm(`🗑️ Bạn có chắc muốn XÓA bản snapshot '${snapname}' không? Thao tác này không thể hoàn tác!`)) {
+            return;
+        }
+
+        showToast(`🗑️ Đang xóa snapshot '${snapname}'...`);
+        try {
+            const res = await fetch(`/api/nodes/${currentSnapshotVm.node}/vms/${currentSnapshotVm.vmid}/snapshots/${snapname}`, {
+                method: "DELETE"
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast(`✅ Đã xóa snapshot '${snapname}' thành công!`);
+                await loadVmSnapshots();
+            } else {
+                alert(`Lỗi xóa snapshot: ${data.error || "Không rõ nguyên nhân"}`);
+            }
+        } catch (err) {
+            alert(`Lỗi kết nối: ${err.message}`);
+        }
     };
 
     // ==========================================
@@ -1415,6 +1740,67 @@ document.addEventListener("DOMContentLoaded", () => {
 
     btnRefresh.addEventListener("click", loadVms);
 
+    // ==========================================
+    // SCRIPT PRESETS CHO POST-PROVISIONING HOOKS
+    // ==========================================
+    const scriptPresets = {
+        docker: `#cloud-config
+# Cài đặt tự động Docker Engine & Docker Compose
+packages:
+  - curl
+  - git
+  - htop
+  - ca-certificates
+runcmd:
+  - curl -fsSL https://get.docker.com -o get-docker.sh
+  - sh get-docker.sh
+  - usermod -aG docker root
+  - systemctl enable --now docker
+  - echo "Docker installed successfully" > /root/bootstrap.log`,
+
+        nginx: `#cloud-config
+# Cài đặt Nginx Web Server & trang chào mừng
+packages:
+  - nginx
+  - curl
+  - ufw
+runcmd:
+  - systemctl enable --now nginx
+  - echo "<h1>🚀 Deployed via Proxmox Pulumi Portal</h1><p>VM IP: $(hostname -I)</p>" > /usr/share/nginx/html/index.html
+  - ufw allow 'Nginx Full'
+  - ufw --force enable`,
+
+        security: `#cloud-config
+# Tối ưu bảo mật hệ thống & Cấu hình UFW Firewall
+packages:
+  - fail2ban
+  - ufw
+  - unattended-upgrades
+runcmd:
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp
+  - ufw --force enable
+  - systemctl enable --now fail2ban
+  - echo "Security hardening completed." > /root/hardening.log`
+    };
+
+    window.applyScriptPreset = (type) => {
+        const userDataTextarea = document.getElementById("userData");
+        if (!userDataTextarea) return;
+
+        if (type === "clear") {
+            userDataTextarea.value = "";
+            showToast("Đã xóa nội dung script cấu hình.");
+            return;
+        }
+
+        if (scriptPresets[type]) {
+            userDataTextarea.value = scriptPresets[type];
+            showToast(`Đã áp dụng mẫu cấu hình '${type.toUpperCase()}'!`);
+        }
+    };
+
     // Xử lý tạo VM mới
     const form = document.getElementById("createVmForm");
     const btnSubmit = document.getElementById("btnSubmit");
@@ -1439,6 +1825,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const memoryMb = parseInt(formData.get("memoryGb")) * 1024;
         const diskSizeGb = parseInt(formData.get("diskSizeGb"));
         const sshPublicKey = formData.get("sshPublicKey");
+        const userData = formData.get("userData");
         const upgrade = formData.get("upgrade") === "on";
         const protection = formData.get("protection") === "on";
 
@@ -1459,6 +1846,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 memoryMb,
                 diskSizeGb,
                 sshPublicKey,
+                userData,
                 upgrade,
                 protection,
             };
@@ -1507,6 +1895,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     memoryMb,
                     diskSizeGb,
                     sshPublicKey,
+                    userData,
                     upgrade,
                     protection,
                 });
@@ -1521,7 +1910,11 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             const res = await fetch("/api/vms", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-User-Role": currentUserRole,
+                    "X-User-Name": currentUserRole === "admin" ? "admin" : "developer"
+                },
                 body: JSON.stringify(payload),
             });
             const result = await res.json();
@@ -1542,6 +1935,68 @@ document.addEventListener("DOMContentLoaded", () => {
             spinner.classList.add("hidden");
         }
     });
+
+    // ==========================================
+    // NHẬT KÝ KIỂM TOÁN (AUDIT LOGS)
+    // ==========================================
+    const auditTableBody = document.getElementById("auditTableBody");
+    const btnRefreshAudit = document.getElementById("btnRefreshAudit");
+
+    async function loadAuditLogs() {
+        if (!auditTableBody) return;
+        try {
+            const res = await fetch("/api/audit-logs", {
+                headers: {
+                    "X-User-Role": currentUserRole,
+                    "X-User-Name": currentUserRole === "admin" ? "admin" : "developer"
+                }
+            });
+            const data = await res.json();
+
+            if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+                auditTableBody.innerHTML = data.data.map(log => {
+                    const timeStr = log.timestamp ? new Date(log.timestamp).toLocaleString() : "-";
+                    const isSuccess = log.status === "SUCCESS";
+                    const isDenied = log.status === "DENIED";
+
+                    const statusBadge = isSuccess 
+                        ? `<span class="tag-deployed"><i data-lucide="check-circle" class="badge-svg"></i> Thành Công</span>` 
+                        : (isDenied 
+                            ? `<span class="tag-env tag-env-pro"><i data-lucide="shield-alert" class="badge-svg"></i> Từ Chối (RBAC)</span>` 
+                            : `<span class="tag-env tag-env-stag"><i data-lucide="alert-triangle" class="badge-svg"></i> Thất Bại</span>`);
+
+                    const roleBadge = log.role === "admin" 
+                        ? `<span class="tag-env tag-env-pro">👑 Admin</span>` 
+                        : `<span class="tag-env tag-env-dev">👨‍💻 Dev</span>`;
+
+                    return `
+                        <tr>
+                            <td style="font-family:'JetBrains Mono',monospace; font-size:11.5px; color:#cbd5e1;">${timeStr}</td>
+                            <td>
+                                <strong>${log.username}</strong>
+                                <div style="margin-top:3px;">${roleBadge}</div>
+                            </td>
+                            <td><code style="color:#38bdf8; font-weight:600;">${log.action}</code></td>
+                            <td><strong style="color:#f8fafc;">${log.target || "-"}</strong></td>
+                            <td>${log.environment ? renderEnvBadge(log.environment) : '<span class="text-muted">—</span>'}</td>
+                            <td>${statusBadge}</td>
+                            <td style="font-size:12px; color:#94a3b8; line-height:1.4;">${log.details || "-"}</td>
+                        </tr>
+                    `;
+                }).join("");
+
+                if (window.lucide) window.lucide.createIcons();
+            } else {
+                auditTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding: 24px;">Chưa có bản ghi nhật ký kiểm toán nào</td></tr>`;
+            }
+        } catch (err) {
+            auditTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-danger" style="padding: 24px;">Lỗi tải Audit Logs: ${err.message}</td></tr>`;
+        }
+    }
+
+    if (btnRefreshAudit) {
+        btnRefreshAudit.addEventListener("click", loadAuditLogs);
+    }
 
     window.destroyVm = async (stackName, isProtected) => {
         let force = false;

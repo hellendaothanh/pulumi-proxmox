@@ -17,7 +17,7 @@ export class ProxmoxApiClient {
         return process.env.PROXMOX_VE_API_TOKEN || "";
     }
 
-    private async request(path: string): Promise<any> {
+    private async request(path: string, options: { method?: string; body?: any } = {}): Promise<any> {
         if (!this.endpoint) {
             throw new Error("PROXMOX_VE_ENDPOINT chưa được cấu hình trong file .env (ví dụ: https://192.168.1.100:8006)");
         }
@@ -30,10 +30,26 @@ export class ProxmoxApiClient {
             ? this.apiToken 
             : `PVEAPIToken=${this.apiToken}`;
 
+        const headers: Record<string, string> = {
+            Authorization: authHeader,
+        };
+
+        let bodyData: any = undefined;
+        if (options.body) {
+            headers["Content-Type"] = "application/x-www-form-urlencoded";
+            const params = new URLSearchParams();
+            for (const key of Object.keys(options.body)) {
+                if (options.body[key] !== undefined && options.body[key] !== null) {
+                    params.append(key, String(options.body[key]));
+                }
+            }
+            bodyData = params.toString();
+        }
+
         const res = await fetch(url, {
-            headers: {
-                Authorization: authHeader,
-            },
+            method: options.method || "GET",
+            headers,
+            body: bodyData,
             agent: httpsAgent as any,
         });
 
@@ -44,6 +60,95 @@ export class ProxmoxApiClient {
 
         const data: any = await res.json();
         return data.data;
+    }
+
+    // Power Operations (Start, Stop, Shutdown, Reset, Reboot)
+    async vmStart(nodeName: string, vmid: number | string) {
+        return await this.request(`/nodes/${nodeName}/qemu/${vmid}/status/start`, { method: "POST" });
+    }
+
+    async vmStop(nodeName: string, vmid: number | string) {
+        return await this.request(`/nodes/${nodeName}/qemu/${vmid}/status/stop`, { method: "POST" });
+    }
+
+    async vmShutdown(nodeName: string, vmid: number | string) {
+        return await this.request(`/nodes/${nodeName}/qemu/${vmid}/status/shutdown`, { method: "POST" });
+    }
+
+    async vmReset(nodeName: string, vmid: number | string) {
+        return await this.request(`/nodes/${nodeName}/qemu/${vmid}/status/reset`, { method: "POST" });
+    }
+
+    async vmReboot(nodeName: string, vmid: number | string) {
+        return await this.request(`/nodes/${nodeName}/qemu/${vmid}/status/reboot`, { method: "POST" });
+    }
+
+    // Snapshot Operations
+    async getVmSnapshots(nodeName: string, vmid: number | string) {
+        try {
+            return await this.request(`/nodes/${nodeName}/qemu/${vmid}/snapshot`);
+        } catch (e) {
+            return [];
+        }
+    }
+
+    async createVmSnapshot(nodeName: string, vmid: number | string, snapname: string, description?: string, vmstate: boolean = false) {
+        return await this.request(`/nodes/${nodeName}/qemu/${vmid}/snapshot`, {
+            method: "POST",
+            body: {
+                snapname,
+                description: description || "",
+                vmstate: vmstate ? 1 : 0
+            }
+        });
+    }
+
+    async rollbackVmSnapshot(nodeName: string, vmid: number | string, snapname: string) {
+        return await this.request(`/nodes/${nodeName}/qemu/${vmid}/snapshot/${snapname}/rollback`, {
+            method: "POST"
+        });
+    }
+
+    async deleteVmSnapshot(nodeName: string, vmid: number | string, snapname: string) {
+        return await this.request(`/nodes/${nodeName}/qemu/${vmid}/snapshot/${snapname}`, {
+            method: "DELETE"
+        });
+    }
+
+    // Tạo PVEAuthCookie Ticket khi cần (Console/noVNC xác thực session)
+    async createAuthTicket() {
+        try {
+            const username = process.env.PROXMOX_VE_USERNAME || "root@pam";
+            const password = process.env.PROXMOX_VE_PASSWORD || "";
+            if (!password) return null;
+
+            const res = await this.request("/access/ticket", {
+                method: "POST",
+                body: { username, password }
+            });
+            return res; // { ticket, CSRFPreventionToken, username }
+        } catch {
+            return null;
+        }
+    }
+
+    // Console noVNC Ticket / Web Console Info
+    async getVncTicket(nodeName: string, vmid: number | string) {
+        try {
+            return await this.request(`/nodes/${nodeName}/qemu/${vmid}/vncproxy`, {
+                method: "POST",
+                body: {
+                    websocket: 1
+                }
+            });
+        } catch (e: any) {
+            return null;
+        }
+    }
+
+    // Lấy link web console trực tiếp tới Proxmox VE
+    getDirectConsoleUrl(nodeName: string, vmid: number | string) {
+        return `${this.endpoint}/?console=kvm&novnc=1&vmid=${vmid}&node=${nodeName}&resize=scale`;
     }
 
     // Lấy danh sách nodes trong Cluster và thông tin CPU, RAM, Uptime

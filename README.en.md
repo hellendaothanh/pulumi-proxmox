@@ -10,7 +10,16 @@ An enterprise-ready, self-service infrastructure portal and automation platform 
 
 ## 🌟 Key Features
 
-### 1. 📊 Cluster Resource Overview & Smart Navigation
+### 1. 🛡️ Resource Governance & Multi-Tenancy (RBAC & Audit Logs)
+* **Role-Based Access Control (RBAC)**:
+  * **👑 Administrator**: Full administrative authority; allowed to provision, configure, alter, and destroy VMs and snapshots across all environments (`DEV`, `STAGING`, `PROD`).
+  * **👨‍💻 Developer**: Strictly constrained by environment isolation policies — **can only provision and destroy resources in the `DEV` environment**; creation and deletion requests on `STAGING` and `PROD` are automatically denied by the backend policy engine.
+  * **Role Switcher**: Quick role toggling directly from the top navigation bar for testing, auditing, and role segregation.
+* **Audit Logging & Compliance Traceability**:
+  * Records detailed transaction trails: **Timestamp**, **Username & Role**, **Action**, **Target VM/Stack**, **Environment**, **Status (SUCCESS / DENIED)**, and **Failure/Denial reasons**.
+  * Dedicated **Audit Logs** tab providing full visibility into operational history and compliance auditing.
+
+### 2. 📊 Cluster Resource Overview & Smart Navigation
 * **Sticky Node Quick Navigation Bar**:
   * Pinned navigation bar that remains visible when scrolling, showing real-time cluster health, VM tally (`running/total`), and storage engines per node.
   * **1-Click Jump**: Smoothly scrolls directly to the targeted node and triggers a temporary Purple Glow Highlight effect.
@@ -25,7 +34,31 @@ An enterprise-ready, self-service infrastructure portal and automation platform 
   * **2-Column IP Grid Matrix**: Automatically restricts multi-IP displays to a clean 2-column layout to prevent table overflow and maintain visual balance.
   * **Back to Top Floating Button**: Smart floating button that triggers smooth scrolling back to the top of the dashboard.
 
-### 2. ⚡ Single & Multi-Node Batch VM Provisioning
+### 3. ⚡ VM Lifecycle Management & Fast Operations
+* **Direct Power Controls (1-Click Actions)**:
+  * Control VM power states directly from the overview table: **Start**, **ACPI Shutdown** (Safe shutdown), **Force Stop** (Hard power off), **Reboot** (Graceful restart), and **Force Reset**.
+  * Auto-detects runtime status to present dynamic context buttons with safety confirmation prompts before abrupt power cuts.
+* **Integrated Web Console (noVNC / Proxmox Web Console)**:
+  * Fullscreen/Modal embedded console window directly inside the web portal.
+  * Access VM shells/desktop environments without logging into the primary Proxmox VE web GUI.
+  * One-click action to launch console in an independent browser tab.
+* **Instant Snapshot Management**:
+  * **Create Snapshots**: Custom snapshot naming, rich descriptions, and optional `RAM State` preservation for live VMs.
+  * **Rollback Snapshots**: Instant revert to any point-in-time snapshot with a single click (ideal before patching OS or performing risky config updates).
+  * **Delete Snapshots**: Easily clean up and prune outdated snapshots.
+
+### 4. 🤖 Post-provisioning Automation & IaC Hooks (Cloud-Init Bootstrap)
+* **Automated Post-boot Bootstrap (Custom User-Data)**:
+  * Injects Cloud-Init `user-data` YAML or Shell bootstrap scripts (`#!/bin/bash`) directly into VM creation.
+  * Automatically creates managed Snippet files on Proxmox VE and mounts them to the VM initialization layer.
+* **1-Click Script Presets Library**:
+  * 🐳 **Docker & Compose**: Installs Docker Engine, Docker Compose, sets user permissions, and activates daemon.
+  * 🌐 **Nginx Web Server**: Installs Nginx, generates an active welcome landing page showing the VM IP, and configures firewall rules.
+  * 🛡️ **Hardening & Security**: Enforces UFW firewall (SSH only), configures Fail2ban, and enables automated security updates.
+* **SSH Public Key Injection**:
+  * Seamlessly passes root SSH public keys for passwordless authentication immediately after first boot.
+
+### 5. 🏗️ Single & Multi-Node Batch VM Provisioning
 * **Deploy 1 to 10 VMs in Batches**:
   * Auto-sequential VM naming (e.g., `postgresql` ➔ `postgresql01`, `postgresql02`, `postgresql03`...).
   * Smart **Round-Robin** workload distribution across all selected target nodes.
@@ -38,14 +71,8 @@ An enterprise-ready, self-service infrastructure portal and automation platform 
 * **Environment Classification & Tagging**:
   * Environment LED status badges: **DEV** (Green), **STAGING** (Amber), **PROD** (Red).
   * Custom categorization tags (`#database`, `#backend`, `#k8s`...).
-* **CPU & Network Architecture**:
-  * CPU Type selection (`host` Passthrough, `x86-64-v2-AES`, `x86-64-v3`, `kvm64`...).
-  * Network Bridge selection (`vmbr0`, `vmbr1`...) with optional **VLAN Tag** (1 - 4094 or Untagged).
-* **Hardware Compatibility & Safety**:
-  * Emulates modern `q35` chipset, Cloud-Init on `ide0`/`scsi0`, and `virtio-scsi-single` storage controllers.
-  * Integrates Proxmox **Protection Mode** flag to prevent accidental deletion of critical production VMs.
 
-### 3. 🛠️ Self-Service Pulumi Stack Management & Live Terminal Logs
+### 6. 🛠️ Self-Service Pulumi Stack Management & Live Terminal Logs
 * Inventory of all active Pulumi Stacks provisioned through the portal.
 * **1-Click Copy IP**: Instant VM IP copy for fast SSH and service connectivity.
 * **Live Streaming Console (SSE)**:
@@ -61,13 +88,13 @@ An enterprise-ready, self-service infrastructure portal and automation platform 
 ```text
 pulumi-proxmox/
 ├── public/                       # Frontend Web Portal (Dark Glassmorphic UI)
-│   ├── index.html                # UI Structure, Navigation Bar & Provisioning Forms
+│   ├── index.html                # UI Structure, RBAC Switcher, Navigation, Modals & Forms
 │   ├── style.css                 # CSS Design System, Responsive & Micro-animations
-│   └── app.js                    # Frontend logic, Instant Search, Sticky Nav, SSE log stream
+│   └── app.js                    # Frontend logic, RBAC Rules, Audit Logs, Presets, Console, Snapshots, SSE
 ├── src/                          # Backend & Pulumi IaC Sources
-│   ├── server.ts                 # Express Server & Pulumi Automation API Runner
-│   ├── proxmox-api.ts            # Proxmox REST API Client (Fetch Nodes, Storages, VMs, Disks)
-│   └── pulumi-program.ts         # Pulumi Resource Definitions for Proxmox VE
+│   ├── server.ts                 # Express Server, RBAC Policy Guard, Audit Engine & Pulumi Runner
+│   ├── proxmox-api.ts            # Proxmox REST API Client (Power, Snapshots, Console, Resources)
+│   └── pulumi-program.ts         # Pulumi Resource Definitions, Cloud-Init Snippets & VM Proxmox VE
 ├── .env.example                  # Environment Variables Template
 ├── package.json                  # Dependencies & Scripts
 ├── Pulumi.yaml                   # Pulumi Project Definition
@@ -83,7 +110,7 @@ pulumi-proxmox/
 1. **Node.js**: v18 or later (Node.js 20+ LTS recommended).
 2. **Pulumi CLI**: Installed on host machine (`pulumi version` >= 3.100.0).
 3. **Proxmox VE**: Proxmox VE 7.x / 8.x cluster with API Token and administrator privileges.
-4. **QEMU Guest Agent**: Installed in Cloud Images/Templates for automatic IP resolution.
+4. **QEMU Guest Agent & Cloud-Init**: Pre-installed in Cloud Images/Templates for automatic IP resolution and bootstrap execution.
 
 ---
 
