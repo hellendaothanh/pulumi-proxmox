@@ -1,5 +1,9 @@
 # 🚀 Proxmox VE Self-Service Portal & IaC Automation with Pulumi
 
+English documentation: [README.en.md](./README.en.md) | **Tiếng Việt**
+
+---
+
 Hệ thống quản lý, giám sát và tự động hóa khởi tạo hạ tầng máy ảo (VM) trên cụm **Proxmox VE** theo mô hình **Infrastructure as Code (IaC)**, xây dựng trên nền tảng **Pulumi Automation API**, **Node.js (TypeScript)** và giao diện Web Dashboard hiện đại chuẩn Enterprise.
 
 ---
@@ -39,16 +43,11 @@ Hệ thống quản lý, giám sát và tự động hóa khởi tạo hạ tầ
   * Tích hợp bộ đếm giây thông minh `[RUNNING] @ Updating... [15s]` và log chuẩn DevOps CLI.
   * Cảnh báo an toàn khi xóa máy ảo đang bật chế độ Protection trên Proxmox VE.
 
-### 4. 🛡️ Tiện Ích Tự Động Hóa WireGuard VPN (`deploy-wg`)
-* Script Bash quản lý WireGuard VPN Hub & Peer Client thông minh.
-* Tự động cấu hình tường lửa (`iptables`, `nftables`, `firewalld`, `ufw`, `pf`).
-* Quản lý vòng đời Client, hỗ trợ phân chia dải IP, giới hạn thời gian hết hạn (Expiry), xuất mã QR Terminal và File `.conf`.
-
 ---
 
 ## 📁 Cấu Trúc Thư Mục Dự Án
 
-```
+```text
 pulumi-proxmox/
 ├── public/                       # Giao diện Web Portal (Dark Glassmorphic UI)
 │   ├── index.html                # Cấu trúc giao diện và các form khởi tạo
@@ -58,11 +57,12 @@ pulumi-proxmox/
 │   ├── server.ts                 # Express Server & Pulumi Automation API Runner
 │   ├── proxmox-api.ts            # Proxmox REST API Client
 │   └── pulumi-program.ts         # Khai báo tài nguyên Pulumi cho VM Proxmox VE
-├── deploy-wg                     # Script quản lý WireGuard VPN Hub & Clients
 ├── .env.example                  # File mẫu cấu hình biến môi trường
 ├── package.json                  # Dependencies & Scripts
 ├── Pulumi.yaml                   # Pulumi Project Definition
-└── tsconfig.json                 # Cấu hình TypeScript
+├── tsconfig.json                 # Cấu hình TypeScript
+├── README.md                     # Tài liệu tiếng Việt
+└── README.en.md                  # English Documentation
 ```
 
 ---
@@ -98,96 +98,39 @@ Chỉnh sửa nội dung file `.env` với thông tin cụm Proxmox của bạn:
 
 ```env
 # Proxmox VE API Endpoint
-PROXMOX_VE_ENDPOINT="https://192.168.1.100:8006/"
+PROXMOX_VE_ENDPOINT="https://192.168.1.100:8006"
 PROXMOX_VE_INSECURE="true"
 
-# Proxmox API Token (Format: USER@REALM!TOKENID=SECRET)
+# API Token Authentication (PVEAPIToken=USER@REALM!TOKENID=UUID)
 PROXMOX_VE_API_TOKEN="root@pam!pulumi=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
-# Thông tin SSH Proxmox Host (Dùng khi import Cloud Image / Disk)
-PROXMOX_VE_SSH_USERNAME="root"
-PROXMOX_VE_SSH_PASSWORD="your-root-password"
-# Hoặc dùng SSH Private Key:
-# PROXMOX_VE_SSH_PRIVATE_KEY="-----BEGIN OPENSSH PRIVATE KEY-----\n..."
-
-# Cổng Web Portal
+# Server Port
 PORT=3000
+
+# Pulumi Backend Login (Mặc định dùng Local Backend)
+PULUMI_BACKEND_URL="file://~"
 ```
 
-> **Mẹo tạo API Token trên Proxmox VE**:
-> 1. Vào **Proxmox VE Web UI** ➔ **Datacenter** ➔ **Permissions** ➔ **API Tokens** ➔ **Add**.
-> 2. Chọn User `root@pam`, đặt Token ID là `pulumi`, bỏ chọn *Privilege Separation*.
-> 3. Sao chép Secret Token và dán vào `PROXMOX_VE_API_TOKEN`.
+### Bước 3: Khởi chạy Ứng dụng
+
+* **Chế độ Phát triển (Dev Mode với Hot Reload)**:
+  ```bash
+  npm run dev
+  ```
+* **Chế độ Production**:
+  ```bash
+  npm start
+  ```
+
+Truy cập giao diện Web Dashboard tại: `http://localhost:3000`
 
 ---
 
-### Bước 3: Khởi Chạy Ứng Dụng
+## 🔒 Hướng Dẫn Tạo Proxmox API Token
 
-#### Chế độ Phát triển (Development with Auto-reload):
-```bash
-npm run dev
-```
-
-#### Chế độ Chạy chính thức (Production):
-```bash
-npm start
-```
-
-Sau khi khởi chạy thành công, mở trình duyệt và truy cập:
-👉 **[http://localhost:3000](http://localhost:3000)**
-
----
-
-## 📖 Hướng Dẫn Sử Dụng Giao Diện Web
-
-### 1. Giám sát & Quét tài nguyên cụm
-* Chọn tab **📊 Tài Nguyên Cụm (Cluster)** để xem trạng thái các Node, CPU/RAM tải thực tế và danh sách VMs đang chạy.
-* Bấm vào nút icon **Sao chép** cạnh IP của Node hoặc IP của máy ảo để lấy địa chỉ nhanh chóng.
-* Bấm nút **Chi tiết** trên từng VM để xem thông số phần cứng, card mạng, chế độ Protection và cấu hình raw.
-
-### 2. Khởi tạo 1 Máy Ảo Mới
-1. Chuyển sang tab **Khởi Tạo VM**.
-2. Giữ thanh trượt **Số Lượng (Cluster)** ở mức `1 VM`.
-3. Nhập **Tên Máy Ảo**, chọn **Môi Trường** (`DEV`, `STAG`, `PROD`) và nhập Tags nếu cần.
-4. Chọn **Proxmox Node** mục tiêu (xem thẻ *Thống Kê Tài Nguyên Sống* để kiểm tra dung lượng trống).
-5. Chọn **Ổ Lưu Trữ (Datastore)**, **Image OS (Cloud-Init/ISO)**, **Network Bridge** và **VLAN Tag** (nếu có).
-6. Kéo thanh trượt điều chỉnh **vCPU**, **RAM (GB)**, **Dung Lượng Đĩa (GB)**.
-7. Dán **SSH Public Key** để đăng nhập không cần mật khẩu.
-8. Bấm **Triển Khai VM** và theo dõi tiến trình hiển thị trực tiếp trên Terminal Log.
-
-### 3. Khởi tạo Cụm Máy Ảo (Cluster Batch Deployment)
-1. Kéo thanh trượt **Số Lượng (Cluster)** lên số lượng mong muốn (ví dụ: `3 VMs`).
-2. Nhập tên gốc cho cụm (ví dụ: `k8s-worker` hoặc `postgresql`).
-3. Dùng các Tab bộ lọc Storage (`zfs-storage`, `local-lvm`...) để lọc ra nhóm Node cùng loại phần cứng.
-4. Tích chọn các Node muốn phân bổ ➔ Xem trước danh sách phân tầng tại khung **Xem trước phân bổ cụm**.
-5. Bấm **Triển Khai Cụm 3 Máy Ảo** ➔ Hệ thống sẽ tự động khởi tạo tuần tự từng VM trên các Node đã chọn.
-
-### 4. Quản lý & Xóa Máy Ảo
-* Trong bảng **Danh Sách VM Đã Triển Khai (Pulumi Stacks)**, bấm nút **Xóa** cạnh VM tương ứng.
-* Nếu VM đang bật **Protection Mode**, hệ thống sẽ cảnh báo an toàn. Bạn cần tắt Protection trên Proxmox Web UI hoặc xác nhận Force Destroy để tiến hành xóa sạch tài nguyên.
-
----
-
-## 🔒 Quản Lý VPN WireGuard (`deploy-wg`)
-
-Thư mục dự án đi kèm công cụ `deploy-wg` hỗ trợ thiết lập mạng riêng ảo an toàn:
-
-```bash
-# Xem hướng dẫn sử dụng
-./deploy-wg --help
-
-# Khởi chạy giao diện Menu quản lý tương tác (yêu cầu whiptail/dialog)
-./deploy-wg --menu
-
-# Tạo cấu hình cho 1 client mới với tên chỉ định
-./deploy-wg client-dev-01
-
-# Xóa cấu hình của 1 client
-./deploy-wg --remove client-dev-01
-```
-
----
-
-## 📜 Giấy Phép & Tác Quyền
-
-Dự án được phát hành dưới giấy phép mã nguồn mở **MIT License**. Tự do sử dụng, tùy biến và triển khai cho hạ tầng doanh nghiệp của bạn.
+1. Truy cập Web UI Proxmox VE ➔ **Datacenter** ➔ **Permissions** ➔ **API Tokens**.
+2. Nhấn **Add**:
+   - **User**: `root@pam` (hoặc user quản trị chuyên dụng).
+   - **Token ID**: `pulumi`.
+   - Bỏ chọn ô *Privilege Separation* nếu muốn token kế thừa toàn quyền của User.
+3. Sao chép chuỗi **Secret Token** và điền vào biến `PROXMOX_VE_API_TOKEN` trong `.env`.
