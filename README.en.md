@@ -22,7 +22,26 @@ An enterprise-ready, self-service infrastructure portal and automation platform 
   * Records detailed transaction trails: **Timestamp**, **Username & Role**, **Action**, **Target VM/Stack**, **Environment**, **Status (SUCCESS / DENIED)**, and **Failure/Denial reasons**.
   * Dedicated **Audit Logs** tab providing full visibility into operational history and compliance auditing.
 
-### 2. 🧙‍♂️ Multi-Step VM Creation Wizard
+### 2. ⚖️ Resource Quotas & Approval Gateway Workflow
+* **Role-Based Resource Quotas (Developer Quotas)**:
+  * Strict resource ceilings for Developer accounts: **Max 2 active VMs**, **Max 4 vCPUs**, **Max 8GB RAM (8192 MB)**.
+  * Dedicated **Phê Duyệt & Quota** tab with live telemetry progress bars (% RAM, % vCPU, % VMs).
+* **Approval Gateway Automation**:
+  * If a Developer requests VM creation on **`STAGING` / `PROD`** or requests specs **exceeding their quota**, the request is automatically routed into the Approval Queue with detailed justification tags.
+  * **Admin 1-Click Governance**: Administrators can review, **Approve**, or **Reject with reasons** directly from the portal UI.
+  * **Seamless Pulumi Runner Trigger**: Approving a request instantly fires the Pulumi Automation Engine in the background to provision the VM without requiring user re-submission.
+
+### 3. 📦 Proxmox LXC Containers & 1-Click App Catalog Stacks
+* **Dual Workload Support (QEMU VMs & LXC Containers)**:
+  * Seamlessly toggle between **QEMU Virtual Machines** (Full OS isolation, dedicated kernel) and **LXC Containers** (Ultra-lightweight, 1-second instant boot, optimized RAM/CPU footprints).
+  * Auto-discovers Proxmox LXC container templates (`.tar.zst`, `.tar.gz`, `vztmpl`) and configures `veth0` networking.
+* **1-Click Enterprise App Catalog Stacks**:
+  * 🐘 **PostgreSQL 16 Enterprise**: Automated PostgreSQL 16 installation, creates database `appdb`, sets up secure user `appuser`, configures remote listening `0.0.0.0/0`, and applies UFW firewall rules.
+  * ⚡ **Redis 7 In-Memory & Sentinel**: Installs Redis Server & Sentinel, sets up authentication passwords, configures Maxmemory LRU eviction policies, and opens ports 6379 / 26379.
+  * 🪣 **MinIO Enterprise S3 Storage**: Downloads MinIO binary, configures Systemd services, provisions `minioadmin` credentials, configures `/data/minio` volume, and enables Web Console (port 9001) / S3 API (port 9000).
+  * ⛵ **Kubernetes (k3s Node)**: Bootstraps a production-ready lightweight k3s node with readable `kubeconfig` (mode 644) and opens firewall port 6443.
+
+### 4. 🧙‍♂️ Multi-Step VM Creation Wizard
 * **Guided 4-Step Provisioning Flow**:
   * **Step 1 (Target & Naming)**: VM Name, Environment badge (`DEV`, `STAGING`, `PROD`), VM Batch Count (1-10 VMs), and Target Node selection / Round-Robin mode.
   * **Step 2 (Hardware Specs)**: Customize vCPU Cores, RAM (MB/GB), Target Storage Pool (`zfs-storage`, `local-lvm`, etc.), and Disk capacity (GB).

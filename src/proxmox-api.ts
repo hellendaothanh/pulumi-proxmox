@@ -192,6 +192,15 @@ export class ProxmoxApiClient {
         }
     }
 
+    // Lấy danh sách LXC Containers trên node
+    async getNodeLxcContainers(nodeName: string) {
+        try {
+            return await this.request(`/nodes/${nodeName}/lxc`);
+        } catch (e) {
+            return [];
+        }
+    }
+
     // Lấy chi tiết config của 1 VM
     async getVmConfig(nodeName: string, vmid: number | string) {
         try {
@@ -201,10 +210,28 @@ export class ProxmoxApiClient {
         }
     }
 
+    // Lấy chi tiết config của 1 LXC Container
+    async getLxcConfig(nodeName: string, vmid: number | string) {
+        try {
+            return await this.request(`/nodes/${nodeName}/lxc/${vmid}/config`);
+        } catch (e) {
+            return null;
+        }
+    }
+
     // Lấy trạng thái runtime hiện tại của VM (IPs từ guest agent, RAM/CPU thực tế)
     async getVmStatus(nodeName: string, vmid: number | string) {
         try {
             return await this.request(`/nodes/${nodeName}/qemu/${vmid}/status/current`);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Lấy trạng thái runtime hiện tại của LXC
+    async getLxcStatus(nodeName: string, vmid: number | string) {
+        try {
+            return await this.request(`/nodes/${nodeName}/lxc/${vmid}/status/current`);
         } catch (e) {
             return null;
         }
@@ -226,10 +253,11 @@ export class ProxmoxApiClient {
 
         for (const node of nodes) {
             const nodeName = node.node;
-            const [networks, storages, vms] = await Promise.all([
+            const [networks, storages, vms, lxcs] = await Promise.all([
                 this.getNodeNetworks(nodeName),
                 this.getNodeStorages(nodeName),
                 this.getNodeVms(nodeName),
+                this.getNodeLxcContainers(nodeName),
             ]);
 
             // Lấy storage contents
@@ -243,7 +271,7 @@ export class ProxmoxApiClient {
                 })
             );
 
-            // Lấy VM details
+            // Lấy VM details (QEMU)
             const detailedVms = await Promise.all(
                 vms.map(async (vm: any) => {
                     const [config, status, agentNet] = await Promise.all([
@@ -271,6 +299,7 @@ export class ProxmoxApiClient {
 
                     return {
                         ...vm,
+                        resourceType: "qemu",
                         config,
                         runtimeStatus: status,
                         status: statusStr,
@@ -279,11 +308,51 @@ export class ProxmoxApiClient {
                 })
             );
 
+            // Lấy LXC details
+            const detailedLxcs = await Promise.all(
+                lxcs.map(async (lxc: any) => {
+                    const [config, status] = await Promise.all([
+                        this.getLxcConfig(nodeName, lxc.vmid),
+                        this.getLxcStatus(nodeName, lxc.vmid),
+                    ]);
+
+                    let ips: string[] = [];
+                    // Phân tích IP từ net0, net1 trong config của LXC nếu có
+                    if (config) {
+                        for (const k of Object.keys(config)) {
+                            if (k.startsWith("net") && typeof config[k] === "string") {
+                                const ipMatch = config[k].match(/ip=([0-9.]+)/);
+                                if (ipMatch && ipMatch[1] && ipMatch[1] !== "dhcp") {
+                                    ips.push(ipMatch[1]);
+                                }
+                            }
+                        }
+                    }
+
+                    const statusStr = (status && typeof status.status === "string")
+                        ? status.status
+                        : (typeof lxc.status === "string" ? lxc.status : "unknown");
+
+                    return {
+                        ...lxc,
+                        resourceType: "lxc",
+                        config,
+                        runtimeStatus: status,
+                        status: statusStr,
+                        agentIps: ips,
+                    };
+                })
+            );
+
+            const allInstances = [...detailedVms, ...detailedLxcs];
+
             nodesDetails.push({
                 ...node,
                 networks,
                 storages: detailedStorages,
-                vms: detailedVms,
+                vms: allInstances,
+                qemuCount: detailedVms.length,
+                lxcCount: detailedLxcs.length,
             });
         }
 

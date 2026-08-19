@@ -4,14 +4,16 @@ import * as proxmox from "@muhlba91/pulumi-proxmoxve";
 export interface VmConfig {
     name: string;
     nodeName: string;
+    resourceType?: "qemu" | "lxc"; // "qemu" (VM) hoặc "lxc" (Container)
     description?: string;
     cores: number;
     memoryMb: number;
     diskSizeGb: number;
     datastoreId?: string; // e.g. "local-lvm", "zfs-storage"
-    diskImageId: string; // e.g. "local:iso/rocky-9-cloud.img"
+    diskImageId: string; // e.g. "local:iso/rocky-9-cloud.img" hoặc "local:vztmpl/ubuntu-22.04-standard.tar.zst"
     sshUser?: string;
     sshPublicKey?: string;
+    password?: string; // Root password cho LXC
     bridge?: string;
     vlanTag?: number; // Optional VLAN ID (1-4094)
     cpuType?: string; // e.g. "host", "x86-64-v2-AES", "x86-64-v3", "kvm64"
@@ -20,6 +22,7 @@ export interface VmConfig {
     upgrade?: boolean;
     protection?: boolean;
     userData?: string; // Custom Cloud-init User-Data Script / Post-provisioning Bootstrap
+    unprivileged?: boolean; // LXC Unprivileged Container
 }
 
 export function createVmProgram(config: VmConfig) {
@@ -39,10 +42,87 @@ export function createVmProgram(config: VmConfig) {
         const isProtected = config.protection ?? false;
         const targetDatastore = config.datastoreId || "local-lvm";
         const envTag = config.environment ? [config.environment.toLowerCase()] : [];
+        const typeTag = [config.resourceType === "lxc" ? "lxc" : "qemu"];
         const customTags = (config.tags || []).map(t => t.toLowerCase().trim()).filter(Boolean);
-        const combinedTags = Array.from(new Set([...envTag, ...customTags]));
+        const combinedTags = Array.from(new Set([...envTag, ...typeTag, ...customTags]));
 
-        // Chuẩn bị Custom User Data / Post-provisioning bootstrap script
+        // =========================================================
+        // CASE 1: LXC CONTAINER CREATION
+        // =========================================================
+        if (config.resourceType === "lxc") {
+            // Xác định loại OS cho LXC (ubuntu, debian, alpine, centos, rocky, etc.)
+            let osType = "unmanaged";
+            const imgLower = config.diskImageId.toLowerCase();
+            if (imgLower.includes("ubuntu")) osType = "ubuntu";
+            else if (imgLower.includes("debian")) osType = "debian";
+            else if (imgLower.includes("alpine")) osType = "alpine";
+            else if (imgLower.includes("centos")) osType = "centos";
+            else if (imgLower.includes("rocky") || imgLower.includes("almalinux") || imgLower.includes("fedora")) osType = "centos";
+
+            const container = new proxmox.ContainerLegacy(config.name, {
+                nodeName: config.nodeName,
+                description: config.description || `LXC Container created via Pulumi [Env: ${config.environment || 'dev'}]`,
+                protection: isProtected,
+                tags: combinedTags.length > 0 ? combinedTags : undefined,
+                unprivileged: config.unprivileged ?? true,
+                features: {
+                    nesting: true,
+                },
+                cpu: {
+                    cores: config.cores,
+                },
+                memory: {
+                    dedicated: config.memoryMb,
+                    swap: 512,
+                },
+                disk: {
+                    datastoreId: targetDatastore,
+                    size: config.diskSizeGb,
+                },
+                operatingSystem: {
+                    templateFileId: config.diskImageId,
+                    type: osType,
+                },
+                initialization: {
+                    hostname: config.name.toLowerCase().replace(/[^a-z0-9-]/g, "-"),
+                    ipConfigs: [
+                        {
+                            ipv4: {
+                                address: "dhcp",
+                            },
+                        },
+                    ],
+                    userAccount: {
+                        keys: config.sshPublicKey ? [config.sshPublicKey.trim()] : undefined,
+                        password: config.password || "ProxmoxLxc@123",
+                    },
+                },
+                networkInterfaces: [
+                    {
+                        name: "veth0",
+                        bridge: config.bridge || "vmbr0",
+                        vlanId: config.vlanTag ? Number(config.vlanTag) : undefined,
+                    },
+                ],
+                started: true,
+            }, { provider });
+
+            return {
+                vmId: container.vmId,
+                vmName: container.initialization.apply(init => init?.hostname || config.name),
+                nodeName: container.nodeName,
+                resourceType: "lxc",
+                environment: config.environment || "dev",
+                tags: combinedTags,
+                vlanTag: config.vlanTag || undefined,
+                protection: isProtected,
+                status: "running",
+            };
+        }
+
+        // =========================================================
+        // CASE 2: QEMU FULL VIRTUAL MACHINE CREATION
+        // =========================================================
         let customUserDataFile: proxmox.FileLegacy | undefined = undefined;
         let userDataFileId: pulumi.Input<string> | undefined = undefined;
 
@@ -119,6 +199,7 @@ export function createVmProgram(config: VmConfig) {
                 ],
                 userAccount: {
                     username: config.sshUser || "root",
+                    password: config.password || undefined,
                     keys: config.sshPublicKey ? [config.sshPublicKey] : undefined,
                 },
                 userDataFileId: userDataFileId,
@@ -132,7 +213,16 @@ export function createVmProgram(config: VmConfig) {
                 },
             ],
             operatingSystem: {
-                type: "l26",
+                type: (() => {
+                    const img = (config.diskImageId || "").toLowerCase();
+                    if (img.includes("win11") || img.includes("2k22") || img.includes("windows-2022") || img.includes("win2022")) return "win11";
+                    if (img.includes("win10") || img.includes("2k19") || img.includes("windows-2019") || img.includes("win2019")) return "win10";
+                    if (img.includes("win8") || img.includes("2k12")) return "win8";
+                    if (img.includes("win7") || img.includes("2k8")) return "win7";
+                    if (img.includes("solaris")) return "solaris";
+                    if (img.includes("freebsd") || img.includes("openbsd") || img.includes("netbsd")) return "other";
+                    return "l26"; // Mặc định cho mọi bản phân phối Linux hiện đại (Kernel 2.6/3.x/4.x/5.x/6.x: Ubuntu, Debian, Rocky, RHEL, CentOS, AlmaLinux, Alpine, Arch...)
+                })(),
             },
             agent: {
                 enabled: true,
@@ -145,6 +235,7 @@ export function createVmProgram(config: VmConfig) {
             vmId: vm.vmId,
             vmName: vm.name,
             nodeName: vm.nodeName,
+            resourceType: "qemu",
             environment: config.environment || "dev",
             tags: combinedTags,
             vlanTag: config.vlanTag || undefined,

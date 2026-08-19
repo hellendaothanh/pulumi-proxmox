@@ -22,7 +22,26 @@ Hệ thống quản lý, giám sát và tự động hóa khởi tạo hạ tầ
   * Ghi vết đầy đủ mọi hoạt động: **Thời gian thực hiện**, **Danh tính (Username) & Vai trò (Role)**, **Hành động (Action)**, **Mục tiêu (Target VM/Stack)**, **Môi trường (Environment)**, **Trạng thái (SUCCESS / DENIED)** và **Chi tiết nguyên nhân**.
   * Chuyên mục **Audit Logs** trực quan giúp truy vết lịch sử triển khai, tuân thủ tiêu chuẩn an toàn thông tin DevSecOps.
 
-### 2. 🧙‍♂️ Trình Tạo Máy Ảo Theo Từng Bước Thông Minh (Multi-Step Creation Wizard)
+### 2. ⚖️ Quản Trị Hạn Mức Tài Nguyên & Cổng Phê Duyệt (Resource Quotas & Approval Gateway)
+* **Hạn Mức Quota Theo Vai Trò (Developer Resource Quotas)**:
+  * Đặt hạn mức cứng cho Developer: **Tối đa 2 VMs hoạt động đồng thời**, **Tối đa 4 vCPUs**, **Tối đa 8GB RAM (8192 MB)**.
+  * Tab **Phê Duyệt & Quota** hiển thị thanh tiến trình trực quan (% RAM, % vCPU, % VMs) theo thời gian thực.
+* **Cổng Phê Duyệt Tự Động (Approval Workflow Gate)**:
+  * Khi Developer yêu cầu tạo VM trên môi trường **`STAGING` / `PROD`** hoặc yêu cầu tài nguyên **vượt định mức Quota**, hệ thống sẽ tự động chuyển yêu cầu vào Hàng Đợi Chờ Duyệt (Approval Queue) kèm lý do chi tiết.
+  * **Admin 1-Click Action**: Quản trị viên có thể xem danh sách, **Phê duyệt (Approve)** hoặc **Từ chối kèm lý do (Reject)** trực tiếp trên Web UI.
+  * **Kích hoạt IaC tự động**: Ngay khi Admin nhấn Phê duyệt, hệ thống tự động kích hoạt Pulumi Engine chạy ngầm để provision máy ảo mà Developer không cần thao tác lại.
+
+### 3. 📦 Tích Hợp Proxmox LXC Container & Thư Viện App Catalog (1-Click Stacks)
+* **Hỗ Trợ Song Song QEMU VMs & LXC Containers**:
+  * Tùy chọn chuyển đổi linh hoạt giữa **QEMU Virtual Machine** (Hệ điều hành độc lập, Kernel riêng) và **LXC Container** (Siêu nhẹ, khởi động tức thì trong 1 giây, tiết kiệm tối đa CPU/RAM).
+  * Tự động nhận diện template LXC (`.tar.zst`, `.tar.gz`, `vztmpl`) và cấu hình mạng `veth0` DHCP/Static.
+* **Thư Viện Ứng Dụng Dựng Sẵn Hoàn Chỉnh (1-Click App Catalog)**:
+  * 🐘 **PostgreSQL 16 Enterprise**: Tự động cài đặt PostgreSQL 16, tạo Database `appdb`, tạo User `appuser` kèm mật khẩu an toàn, mở listen remote `0.0.0.0/0` và cấu hình firewall.
+  * ⚡ **Redis 7 In-Memory & Sentinel**: Tự động cài Redis Server & Sentinel, cấu hình mật khẩu bảo vệ, giới hạn Maxmemory LRU và mở port 6379 / 26379.
+  * 🪣 **MinIO Enterprise S3 Storage**: Tự động tải binary MinIO, cấu hình Systemd Service, tạo User `minioadmin`, phân vùng `/data/minio` và mở Web Console (port 9001) / S3 API (port 9000).
+  * ⛵ **Kubernetes (k3s Node)**: Tự động bootstrap cụm k3s Kubernetes node với `kubeconfig` phân quyền 644 và mở firewall cho API server (port 6443).
+
+### 4. 🧙‍♂️ Trình Tạo Máy Ảo Theo Từng Bước Thông Minh (Multi-Step Creation Wizard)
 * **Quy Trình Khởi Tạo 4 Bước Trực Quan (Step-by-Step Wizard)**:
   * **Bước 1 (Mục Tiêu & Tên Gọi)**: Đặt tên VM, chọn môi trường (`DEV`, `STAGING`, `PROD`), cấu hình số lượng máy ảo (Batch 1-10 VMs) và chọn Node đích/Round-Robin.
   * **Bước 2 (Cấu Hình Phần Cứng)**: Tùy chỉnh vCPU Cores, RAM (MB/GB), Storage Pool đích (`zfs-storage`, `local-lvm`, v.v.) và dung lượng Disk (GB).

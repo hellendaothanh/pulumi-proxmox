@@ -128,9 +128,84 @@ export interface AuditLogEntry {
     action: string;
     target: string;
     environment?: string;
-    status: "SUCCESS" | "DENIED" | "FAILED";
+    status: "SUCCESS" | "DENIED" | "FAILED" | "PENDING_APPROVAL";
     details?: string;
     ip?: string;
+}
+
+// ==========================================
+// RESOURCE QUOTAS & APPROVAL WORKFLOW
+// ==========================================
+export interface ResourceQuota {
+    maxVms: number;       // Số VM tối đa cùng chạy/sở hữu (ví dụ: 2)
+    maxCores: number;     // Số vCPU tối đa (ví dụ: 4)
+    maxMemoryMb: number;  // Số RAM MB tối đa (ví dụ: 8192 MB = 8GB)
+}
+
+export const ROLE_QUOTAS: Record<string, ResourceQuota> = {
+    developer: {
+        maxVms: 2,
+        maxCores: 4,
+        maxMemoryMb: 8192, // 8GB RAM
+    },
+    viewer: {
+        maxVms: 0,
+        maxCores: 0,
+        maxMemoryMb: 0,
+    }
+};
+
+export interface ApprovalRequest {
+    id: string;
+    createdAt: string;
+    requestedBy: {
+        username: string;
+        role: string;
+        displayName: string;
+    };
+    reason: string; // "ENV_RESTRICTION" (STAGING/PROD) | "QUOTA_EXCEEDED"
+    reasonDetails: string;
+    status: "PENDING" | "APPROVED" | "REJECTED";
+    resolvedAt?: string;
+    resolvedBy?: string;
+    rejectionReason?: string;
+    vms: VmConfig[];
+}
+
+const approvalRequests: ApprovalRequest[] = [];
+
+// Hàm tính tổng tài nguyên hiện tại của 1 user
+async function calculateUserResourceUsage(username: string) {
+    let currentVms = 0;
+    let currentCores = 0;
+    let currentMemoryMb = 0;
+
+    try {
+        const clusterOverview = await proxmoxClient.getClusterOverview();
+        for (const node of clusterOverview) {
+            for (const vm of node.vms || []) {
+                // Kiểm tra xem VM có thuộc sở hữu của username qua tags hoặc tên không
+                const tags: string[] = Array.isArray(vm.tags) ? vm.tags : (typeof vm.tags === 'string' ? vm.tags.split(',') : []);
+                const isOwner = tags.some((t: string) => t.toLowerCase() === `user:${username.toLowerCase()}`) ||
+                                tags.some((t: string) => t.toLowerCase() === username.toLowerCase()) ||
+                                (vm.name && vm.name.toLowerCase().startsWith(username.toLowerCase()));
+
+                if (isOwner) {
+                    currentVms += 1;
+                    currentCores += Number(vm.cpus || vm.cores || 1);
+                    currentMemoryMb += Number(vm.maxmem ? Math.round(vm.maxmem / (1024 * 1024)) : (vm.memory || 0));
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("[QUOTA] Không thể quét chi tiết cluster resources cho quota check:", e);
+    }
+
+    return {
+        vms: currentVms,
+        cores: currentCores,
+        memoryMb: currentMemoryMb,
+    };
 }
 
 const auditLogs: AuditLogEntry[] = [
@@ -541,9 +616,165 @@ async function resolveDatastoreForNode(nodeName: string, preferredDatastore?: st
     }
 }
 
-// Endpoint tạo 1 VM hoặc Cụm nhiều VM
+// Helper thực thi tiến trình triển khai Pulumi cho danh sách VMs
+async function executeVmDeployment(vms: VmConfig[], executor: { username: string; role: string }) {
+    const isBatch = vms.length > 1;
+    const stackNames = vms.map(v => `vm-${v.name.toLowerCase().replace(/[^a-z0-9-_]/g, "-")}`);
+
+    if (isBatch) {
+        broadcastLog(`\n[CLUSTER] [User: ${executor.username} (${executor.role.toUpperCase()})] Bắt đầu khởi tạo cụm ${vms.length} máy ảo: ${vms.map(v => `${v.name} (@${v.nodeName})`).join(", ")}...`);
+    } else {
+        broadcastLog(`\n[CREATE] [User: ${executor.username} (${executor.role.toUpperCase()})] Bắt đầu khởi tạo stack '${stackNames[0]}' cho máy ảo ${vms[0].name}...`);
+    }
+
+    for (let i = 0; i < vms.length; i++) {
+        const config = vms[i];
+        const stackName = stackNames[i];
+        const prefix = isBatch ? `[${i + 1}/${vms.length} - ${config.name}]` : `[${config.name}]`;
+
+        // Tự động phân giải datastore phù hợp với từng Node
+        config.datastoreId = await resolveDatastoreForNode(config.nodeName, config.datastoreId);
+
+        broadcastLog(`\n[PULUMI] ${prefix} Đang khởi tạo stack '${stackName}' trên Node '${config.nodeName}' (Storage: ${config.datastoreId})...`);
+
+        try {
+            const program = createVmProgram(config);
+            const stack = await LocalWorkspace.createOrSelectStack({
+                stackName,
+                projectName: "pulumi-proxmox",
+                program,
+            });
+
+            await stack.setConfig("proxmox:endpoint", { value: process.env.PROXMOX_VE_ENDPOINT || "" });
+            await stack.setConfig("proxmox:apiToken", { value: process.env.PROXMOX_VE_API_TOKEN || "", secret: true });
+            await stack.setConfig("proxmox:insecure", { value: process.env.PROXMOX_VE_INSECURE || "true" });
+
+            const logHandler = createLogStreamHandler("Updating");
+
+            const upResult = await stack.up({
+                onOutput: logHandler,
+            });
+
+            broadcastLog(`PROGRESS_END:Updating`);
+            broadcastLog(`✅ ${prefix} Triển khai thành công! VM ID: ${upResult.outputs.vmId?.value || 'N/A'}`);
+        } catch (err: any) {
+            broadcastLog(`PROGRESS_END:Updating`);
+            broadcastLog(`❌ [ERROR] ${prefix} Thất bại: ${err.message}`);
+        }
+    }
+}
+
+// Endpoint lấy hạn mức Quota & Mức sử dụng tài nguyên hiện tại
+app.get("/api/quotas/me", async (req, res) => {
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: "Chưa đăng nhập." });
+    }
+
+    const quota = ROLE_QUOTAS[authUser.role] || { maxVms: 999, maxCores: 999, maxMemoryMb: 999999 };
+    const usage = await calculateUserResourceUsage(authUser.username);
+
+    res.json({
+        success: true,
+        data: {
+            username: authUser.username,
+            role: authUser.role,
+            quota,
+            usage,
+            isAdmin: authUser.role === "admin"
+        }
+    });
+});
+
+// Endpoint lấy danh sách yêu cầu phê duyệt (Approval Requests)
+app.get("/api/approvals", (req, res) => {
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: "Chưa đăng nhập." });
+    }
+
+    // Admin thấy tất cả, Developer chỉ thấy yêu cầu do chính mình tạo
+    let list = approvalRequests;
+    if (authUser.role !== "admin") {
+        list = approvalRequests.filter(r => r.requestedBy.username === authUser.username);
+    }
+
+    res.json({
+        success: true,
+        data: list
+    });
+});
+
+// Endpoint Admin Phê duyệt (Approve) hoặc Từ chối (Reject) yêu cầu
+app.post("/api/approvals/:id/:action", async (req, res) => {
+    const authUser = getAuthUser(req);
+    if (!authUser || authUser.role !== "admin") {
+        return res.status(403).json({ success: false, error: "[RBAC DENIED] Chỉ tài khoản Quản Trị Viên (Admin) mới có quyền phê duyệt hoặc từ chối yêu cầu." });
+    }
+
+    const { id, action } = req.params;
+    const { rejectionReason } = req.body;
+    const request = approvalRequests.find(r => r.id === id);
+
+    if (!request) {
+        return res.status(404).json({ success: false, error: "Không tìm thấy yêu cầu phê duyệt này." });
+    }
+
+    if (request.status !== "PENDING") {
+        return res.status(400).json({ success: false, error: `Yêu cầu này đã được xử lý trước đó (Trạng thái: ${request.status}).` });
+    }
+
+    if (action === "approve") {
+        request.status = "APPROVED";
+        request.resolvedAt = new Date().toISOString();
+        request.resolvedBy = authUser.username;
+
+        recordAuditLog({
+            username: authUser.username,
+            role: authUser.role,
+            action: "APPROVE_VM_REQUEST",
+            target: request.vms.map(v => v.name).join(", "),
+            environment: request.vms[0].environment || "dev",
+            status: "SUCCESS",
+            details: `Admin '${authUser.username}' đã PHÊ DUYỆT yêu cầu khởi tạo cho Developer '${request.requestedBy.username}'. Bắt đầu kích hoạt Pulumi Engine.`
+        });
+
+        broadcastLog(`\n[APPROVAL] ✅ Yêu cầu '${request.id}' của '${request.requestedBy.username}' đã được Admin '${authUser.username}' phê duyệt! Kích hoạt tiến trình khởi tạo...`);
+
+        // Kích hoạt Pulumi Runner chạy ngầm
+        executeVmDeployment(request.vms, { username: request.requestedBy.username, role: request.requestedBy.role });
+
+        return res.json({ success: true, message: `Đã phê duyệt yêu cầu thành công! Tiến trình Pulumi đang khởi tạo máy ảo ngầm.` });
+    } else if (action === "reject") {
+        request.status = "REJECTED";
+        request.resolvedAt = new Date().toISOString();
+        request.resolvedBy = authUser.username;
+        request.rejectionReason = rejectionReason || "Không được phê duyệt bởi Quản trị viên.";
+
+        recordAuditLog({
+            username: authUser.username,
+            role: authUser.role,
+            action: "REJECT_VM_REQUEST",
+            target: request.vms.map(v => v.name).join(", "),
+            environment: request.vms[0].environment || "dev",
+            status: "DENIED",
+            details: `Admin '${authUser.username}' đã TỪ CHỐI yêu cầu khởi tạo của '${request.requestedBy.username}'. Lý do: ${request.rejectionReason}`
+        });
+
+        broadcastLog(`\n[APPROVAL] ❌ Yêu cầu '${request.id}' của '${request.requestedBy.username}' đã bị Admin '${authUser.username}' từ chối. Lý do: ${request.rejectionReason}`);
+
+        return res.json({ success: true, message: "Đã từ chối yêu cầu khởi tạo." });
+    } else {
+        return res.status(400).json({ success: false, error: "Hành động không hợp lệ. Chỉ chấp nhận 'approve' hoặc 'reject'." });
+    }
+});
+
+// Endpoint tạo 1 VM hoặc Cụm nhiều VM (kèm Quota Check & Approval Gate)
 app.post("/api/vms", async (req, res) => {
-    const authUser = getAuthUser(req) || { username: "admin", role: "admin", displayName: "Administrator" };
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: "[AUTH REQUIRED] Vui lòng đăng nhập để thực hiện tạo máy ảo." });
+    }
     const userRole = authUser.role;
     const userName = authUser.username;
     const body = req.body;
@@ -569,34 +800,104 @@ app.post("/api/vms", async (req, res) => {
         });
     }
 
-    // RBAC Check: Developer chỉ được phép tạo trên môi trường DEV
-    if (userRole === "developer") {
-        for (const vm of vms) {
-            const env = (vm.environment || "dev").toLowerCase();
-            if (env !== "dev") {
-                recordAuditLog({
-                    username: userName,
-                    role: userRole,
-                    action: "CREATE_VM_DENIED",
-                    target: vm.name,
-                    environment: env,
-                    status: "DENIED",
-                    details: `Developer '${userName}' bị từ chối tạo VM trên môi trường '${env.toUpperCase()}'. Chỉ Admin mới có quyền thao tác trên STAGING/PROD.`
-                });
-                return res.status(403).json({
-                    success: false,
-                    error: `[RBAC DENIED] Bạn đang đăng nhập với quyền Developer. Developer chỉ được phép triển khai máy ảo trên môi trường DEV (Môi trường yêu cầu: ${env.toUpperCase()}).`
-                });
-            }
-        }
-    }
-
     for (const vm of vms) {
         if (!vm.name || !vm.nodeName) {
             return res.status(400).json({ success: false, error: "Tên VM và Node Name là bắt buộc cho tất cả máy ảo." });
         }
+        // Gắn tag người sở hữu để tính quota chính xác
+        const currentTags: string[] = Array.isArray(vm.tags) ? vm.tags : (typeof vm.tags === 'string' ? (vm.tags as string).split(',') : []);
+        if (!currentTags.some((t: string) => t.toLowerCase() === `user:${userName.toLowerCase()}`)) {
+            currentTags.push(`user:${userName}`);
+        }
+        vm.tags = currentTags;
     }
 
+    // ==========================================
+    // RESOURCE QUOTAS & APPROVAL GATE LOGIC
+    // ==========================================
+    let needsApproval = false;
+    let approvalReason = "";
+    let approvalDetails = "";
+
+    if (userRole === "developer") {
+        const quota = ROLE_QUOTAS.developer;
+        const currentUsage = await calculateUserResourceUsage(userName);
+
+        const requestedVms = vms.length;
+        const requestedCores = vms.reduce((sum, v) => sum + (Number(v.cores) || 1), 0);
+        const requestedMemoryMb = vms.reduce((sum, v) => sum + (Number(v.memoryMb) || 1024), 0);
+
+        const totalVms = currentUsage.vms + requestedVms;
+        const totalCores = currentUsage.cores + requestedCores;
+        const totalMemoryMb = currentUsage.memoryMb + requestedMemoryMb;
+
+        // 1. Kiểm tra môi trường STAGING / PROD
+        const restrictedEnvVm = vms.find(v => (v.environment || "dev").toLowerCase() !== "dev");
+        if (restrictedEnvVm) {
+            needsApproval = true;
+            approvalReason = "ENV_RESTRICTION";
+            approvalDetails = `Developer '${userName}' yêu cầu triển khai trên môi trường ${restrictedEnvVm.environment?.toUpperCase()}. Môi trường STAGING/PROD bắt buộc phải qua Admin phê duyệt.`;
+        }
+
+        // 2. Kiểm tra vượt Quota
+        if (totalVms > quota.maxVms || totalCores > quota.maxCores || totalMemoryMb > quota.maxMemoryMb) {
+            needsApproval = true;
+            approvalReason = "QUOTA_EXCEEDED";
+            const quotaDetailsArr = [];
+            if (totalVms > quota.maxVms) quotaDetailsArr.push(`VMs: ${totalVms}/${quota.maxVms}`);
+            if (totalCores > quota.maxCores) quotaDetailsArr.push(`vCPUs: ${totalCores}/${quota.maxCores}`);
+            if (totalMemoryMb > quota.maxMemoryMb) quotaDetailsArr.push(`RAM: ${Math.round(totalMemoryMb/1024)}GB/${Math.round(quota.maxMemoryMb/1024)}GB`);
+            
+            approvalDetails = `Yêu cầu vượt hạn mức Quota cho phép của Developer (${quotaDetailsArr.join(", ")}). Cần Admin xem xét và cấp phép.`;
+        }
+    }
+
+    // Nếu cần phê duyệt ➔ Đưa vào Hàng Đợi Chờ Duyệt (Approval Queue)
+    if (needsApproval) {
+        const requestId = `req-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+        const newRequest: ApprovalRequest = {
+            id: requestId,
+            createdAt: new Date().toISOString(),
+            requestedBy: {
+                username: userName,
+                role: userRole,
+                displayName: authUser.displayName || userName
+            },
+            reason: approvalReason,
+            reasonDetails: approvalDetails,
+            status: "PENDING",
+            vms: vms
+        };
+
+        approvalRequests.unshift(newRequest);
+
+        recordAuditLog({
+            username: userName,
+            role: userRole,
+            action: "CREATE_VM_PENDING_APPROVAL",
+            target: vms.map(v => v.name).join(", "),
+            environment: vms[0].environment || "dev",
+            status: "PENDING_APPROVAL",
+            details: `Yêu cầu tạo ${vms.length} VM được gửi vào hàng đợi chờ Admin duyệt. Lý do: ${approvalDetails}`
+        });
+
+        broadcastLog(`\n[APPROVAL QUEUE] ⏳ Người dùng '${userName}' đã gửi yêu cầu khởi tạo ${vms.length} VM [${vms.map(v => v.name).join(", ")}]. Trạng thái: Chờ Admin phê duyệt.`);
+
+        return res.json({
+            success: true,
+            requiresApproval: true,
+            message: `⏳ Yêu cầu khởi tạo đã được gửi đến Quản Trị Viên (Admin) để phê duyệt do ${approvalReason === "ENV_RESTRICTION" ? "triển khai trên STAGING/PROD" : "vượt định mức tài nguyên (Quota)"}.`,
+            data: {
+                requestId: newRequest.id,
+                status: "PENDING",
+                reason: approvalReason,
+                details: approvalDetails,
+                vms: vms.map(v => v.name)
+            }
+        });
+    }
+
+    // Nếu không cần duyệt (Admin hoặc Developer hợp lệ trong quota & DEV env) ➔ Khởi tạo ngay
     const isBatch = vms.length > 1;
     const stackNames = vms.map(v => `vm-${v.name.toLowerCase().replace(/[^a-z0-9-_]/g, "-")}`);
 
@@ -611,50 +912,8 @@ app.post("/api/vms", async (req, res) => {
         details: `Khởi tạo ${vms.length} máy ảo trên Node [${Array.from(new Set(vms.map(v => v.nodeName))).join(", ")}]`
     });
 
-    if (isBatch) {
-        broadcastLog(`\n[CLUSTER] [User: ${userName} (${userRole.toUpperCase()})] Bắt đầu khởi tạo cụm ${vms.length} máy ảo: ${vms.map(v => `${v.name} (@${v.nodeName})`).join(", ")}...`);
-    } else {
-        broadcastLog(`\n[CREATE] [User: ${userName} (${userRole.toUpperCase()})] Bắt đầu khởi tạo stack '${stackNames[0]}' cho máy ảo ${vms[0].name}...`);
-    }
-
     // Chạy tiến trình triển khai bất đồng bộ tuần tự
-    (async () => {
-        for (let i = 0; i < vms.length; i++) {
-            const config = vms[i];
-            const stackName = stackNames[i];
-            const prefix = isBatch ? `[${i + 1}/${vms.length} - ${config.name}]` : `[${config.name}]`;
-
-            // Tự động phân giải datastore phù hợp với từng Node
-            config.datastoreId = await resolveDatastoreForNode(config.nodeName, config.datastoreId);
-
-            broadcastLog(`\n[PULUMI] ${prefix} Đang khởi tạo stack '${stackName}' trên Node '${config.nodeName}' (Storage: ${config.datastoreId})...`);
-
-            try {
-                const program = createVmProgram(config);
-                const stack = await LocalWorkspace.createOrSelectStack({
-                    stackName,
-                    projectName: "pulumi-proxmox",
-                    program,
-                });
-
-                await stack.setConfig("proxmox:endpoint", { value: process.env.PROXMOX_VE_ENDPOINT || "" });
-                await stack.setConfig("proxmox:apiToken", { value: process.env.PROXMOX_VE_API_TOKEN || "", secret: true });
-                await stack.setConfig("proxmox:insecure", { value: process.env.PROXMOX_VE_INSECURE || "true" });
-
-                const logHandler = createLogStreamHandler("Updating");
-
-                const upResult = await stack.up({
-                    onOutput: logHandler,
-                });
-
-                broadcastLog(`PROGRESS_END:Updating`);
-                broadcastLog(`✅ ${prefix} Triển khai thành công! VM ID: ${upResult.outputs.vmId?.value || 'N/A'}`);
-            } catch (err: any) {
-                broadcastLog(`PROGRESS_END:Updating`);
-                broadcastLog(`❌ [ERROR] ${prefix} Thất bại: ${err.message}`);
-            }
-        }
-    })();
+    executeVmDeployment(vms, { username: userName, role: userRole });
 
     res.json({
         success: true,
@@ -670,7 +929,10 @@ app.post("/api/vms", async (req, res) => {
 
 // Endpoint xóa VM (kiểm tra protection)
 app.delete("/api/vms/:stackName", async (req, res) => {
-    const authUser = getAuthUser(req) || { username: "admin", role: "admin", displayName: "Administrator" };
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: "[AUTH REQUIRED] Vui lòng đăng nhập để thực hiện xóa máy ảo." });
+    }
     const userRole = authUser.role;
     const userName = authUser.username;
     const { stackName } = req.params;
@@ -720,7 +982,7 @@ app.delete("/api/vms/:stackName", async (req, res) => {
             });
             return res.status(403).json({
                 success: false,
-                error: `[RBAC DENIED] Bạn đang đăng nhập với quyền Developer. Không được phép xóa máy ảo trên môi trường '${environment.toUpperCase()}'.`
+                error: `[RBAC DENIED] Bạn đang đăng nhập với quyền Developer. Không được phép xóa máy ảo trên môi trường '${environment.toUpperCase()}'. Chỉ Admin mới có quyền này.`
             });
         }
 
@@ -789,26 +1051,52 @@ app.delete("/api/vms/:stackName", async (req, res) => {
 // VM LIFECYCLE MANAGEMENT API (Power, Snapshots, Console)
 // ==========================================
 
+// Helper kiểm tra quyền thao tác trên VM (Developer chỉ được thao tác VM DEV)
+async function checkVmPermission(node: string, vmid: string | number, authUser: { username: string; role: string }): Promise<{ allowed: boolean; reason?: string }> {
+    if (authUser.role === "admin") return { allowed: true };
+    if (authUser.role === "viewer") return { allowed: false, reason: "Tài khoản Viewer chỉ có quyền xem, không được phép thay đổi trạng thái hoặc điều khiển máy ảo." };
+
+    if (authUser.role === "developer") {
+        try {
+            const config = await proxmoxClient.getVmConfig(node, Number(vmid));
+            const tags = (config?.tags || "").toLowerCase();
+            const description = (config?.description || "").toLowerCase();
+            
+            // Nếu VM gắn tag PROD hoặc STAGING thì cấm Developer can thiệp
+            if (tags.includes("pro") || tags.includes("prod") || tags.includes("stag") || tags.includes("staging") ||
+                description.includes("env: pro") || description.includes("env: stag")) {
+                return { allowed: false, reason: `Máy ảo #${vmid} thuộc môi trường STAGING/PROD. Quyền Developer không được phép can thiệp máy chủ này.` };
+            }
+        } catch {}
+    }
+
+    return { allowed: true };
+}
+
 // 1. Thao tác nguồn VM (start, stop, shutdown, reset, reboot)
 app.post("/api/nodes/:node/vms/:vmid/power", async (req, res) => {
-    const authUser = getAuthUser(req) || { username: "admin", role: "admin", displayName: "Administrator" };
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: "[AUTH REQUIRED] Vui lòng đăng nhập." });
+    }
     const userRole = authUser.role;
     const userName = authUser.username;
     const { node, vmid } = req.params;
     const { action } = req.body; // "start" | "stop" | "shutdown" | "reset" | "reboot"
 
-    if (userRole === "viewer") {
+    const permCheck = await checkVmPermission(node, vmid, authUser);
+    if (!permCheck.allowed) {
         recordAuditLog({
             username: userName,
             role: userRole,
-            action: `POWER_${action.toUpperCase()}_DENIED`,
+            action: `POWER_${action?.toUpperCase()}_DENIED`,
             target: `VM #${vmid} (@${node})`,
             status: "DENIED",
-            details: `Viewer '${userName}' bị chặn thực hiện lệnh nguồn '${action}' trên VM #${vmid}.`
+            details: permCheck.reason
         });
         return res.status(403).json({
             success: false,
-            error: "[RBAC DENIED] Tài khoản Viewer không có quyền thao tác nguồn (Power Control) trên máy ảo."
+            error: `[RBAC DENIED] ${permCheck.reason}`
         });
     }
 
@@ -873,16 +1161,20 @@ app.get("/api/nodes/:node/vms/:vmid/snapshots", async (req, res) => {
 
 // 3. Tạo Snapshot mới cho VM
 app.post("/api/nodes/:node/vms/:vmid/snapshots", async (req, res) => {
-    const authUser = getAuthUser(req) || { username: "admin", role: "admin", displayName: "Administrator" };
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: "[AUTH REQUIRED] Vui lòng đăng nhập." });
+    }
     const userRole = authUser.role;
     const userName = authUser.username;
     const { node, vmid } = req.params;
     const { snapname, description, vmstate } = req.body;
 
-    if (userRole === "viewer") {
+    const permCheck = await checkVmPermission(node, vmid, authUser);
+    if (!permCheck.allowed) {
         return res.status(403).json({
             success: false,
-            error: "[RBAC DENIED] Tài khoản Viewer không có quyền tạo Snapshot."
+            error: `[RBAC DENIED] ${permCheck.reason}`
         });
     }
 
@@ -903,7 +1195,19 @@ app.post("/api/nodes/:node/vms/:vmid/snapshots", async (req, res) => {
 
 // 4. Khôi phục (Rollback) Snapshot
 app.post("/api/nodes/:node/vms/:vmid/snapshots/:snapname/rollback", async (req, res) => {
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: "[AUTH REQUIRED] Vui lòng đăng nhập." });
+    }
     const { node, vmid, snapname } = req.params;
+    const permCheck = await checkVmPermission(node, vmid, authUser);
+    if (!permCheck.allowed) {
+        return res.status(403).json({
+            success: false,
+            error: `[RBAC DENIED] ${permCheck.reason}`
+        });
+    }
+
     try {
         broadcastLog(`🔄 [SNAPSHOT] Đang khôi phục VM #${vmid} về snapshot '${snapname}'...`);
         const result = await proxmoxClient.rollbackVmSnapshot(node, vmid, snapname);
@@ -917,7 +1221,19 @@ app.post("/api/nodes/:node/vms/:vmid/snapshots/:snapname/rollback", async (req, 
 
 // 5. Xóa Snapshot
 app.delete("/api/nodes/:node/vms/:vmid/snapshots/:snapname", async (req, res) => {
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: "[AUTH REQUIRED] Vui lòng đăng nhập." });
+    }
     const { node, vmid, snapname } = req.params;
+    const permCheck = await checkVmPermission(node, vmid, authUser);
+    if (!permCheck.allowed) {
+        return res.status(403).json({
+            success: false,
+            error: `[RBAC DENIED] ${permCheck.reason}`
+        });
+    }
+
     try {
         broadcastLog(`🗑️ [SNAPSHOT] Đang xóa snapshot '${snapname}' của VM #${vmid}...`);
         const result = await proxmoxClient.deleteVmSnapshot(node, vmid, snapname);
@@ -931,7 +1247,19 @@ app.delete("/api/nodes/:node/vms/:vmid/snapshots/:snapname", async (req, res) =>
 
 // 6. Lấy Web Console URL & noVNC ticket
 app.get("/api/nodes/:node/vms/:vmid/console", async (req, res) => {
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: "[AUTH REQUIRED] Vui lòng đăng nhập." });
+    }
     const { node, vmid } = req.params;
+    const permCheck = await checkVmPermission(node, vmid, authUser);
+    if (!permCheck.allowed) {
+        return res.status(403).json({
+            success: false,
+            error: `[RBAC DENIED] ${permCheck.reason}`
+        });
+    }
+
     try {
         const consoleUrl = proxmoxClient.getDirectConsoleUrl(node, vmid);
         let vncData = null;

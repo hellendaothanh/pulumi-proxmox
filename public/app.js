@@ -117,6 +117,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 updateUserInterfaceProfile();
                 applyRbacUiRestrictions();
                 loadAuditLogs();
+                loadQuotasAndApprovals();
             } else {
                 localStorage.removeItem("pulumi_auth_token");
                 currentAuthToken = "";
@@ -184,6 +185,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                     loadClusterResources();
                     loadAuditLogs();
+                    loadQuotasAndApprovals();
                 } else {
                     loginErrorText.textContent = data.error || "Tên đăng nhập hoặc mật khẩu không chính xác.";
                     loginErrorMsg?.classList.remove("hidden");
@@ -285,42 +287,55 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Áp dụng chính sách hiển thị giao diện theo 3 Role (Admin, Developer, Viewer)
+    // Áp dụng chính sách hiển thị giao diện theo 3 Role (Admin, Developer, Viewer)
     function applyRbacUiRestrictions() {
         const userRole = currentAuthUser ? currentAuthUser.role : "viewer";
         const envRadios = document.querySelectorAll("input[name='environment']");
         const deployTabBtn = document.querySelector(".nav-tab[data-tab='tab-deploy']");
         const btnSubmitVm = document.getElementById("btnSubmit");
 
-        // 1. Viewer: Vô hiệu hóa nút tạo VM, nút xóa, nút power
+        // 1. Viewer: Vô hiệu hóa nút tạo VM, cảnh báo trực quan
         if (userRole === "viewer") {
-            if (deployTabBtn) deployTabBtn.style.opacity = "0.5";
+            if (deployTabBtn) {
+                deployTabBtn.title = "Tài khoản Viewer chỉ có quyền xem, không được phép tạo VM";
+                deployTabBtn.style.opacity = "0.6";
+            }
             if (btnSubmitVm) {
                 btnSubmitVm.disabled = true;
-                btnSubmitVm.title = "Tài khoản Viewer không có quyền tạo VM";
+                btnSubmitVm.title = "⛔ Tài khoản Viewer không có quyền tạo máy ảo";
+                btnSubmitVm.innerHTML = `<i data-lucide="lock" class="btn-icon"></i> <span>Chỉ Xem (Không có quyền Tạo VM)</span>`;
             }
         } else {
-            if (deployTabBtn) deployTabBtn.style.opacity = "1";
+            if (deployTabBtn) {
+                deployTabBtn.title = "";
+                deployTabBtn.style.opacity = "1";
+            }
             if (btnSubmitVm) {
                 btnSubmitVm.disabled = false;
                 btnSubmitVm.title = "";
+                btnSubmitVm.innerHTML = `<span class="spinner hidden"></span><span class="btn-text">Triển Khai VM</span>`;
             }
         }
 
-        // 2. Developer: Khóa các tùy chọn STAGING / PROD
+        // 2. Developer: Hiển thị nhãn (Cần Phê Duyệt) trên STAGING / PROD
         const isDevOnly = userRole === "developer";
         envRadios.forEach(r => {
-            if (isDevOnly) {
-                if (r.value !== "dev") {
-                    r.disabled = true;
-                    r.closest(".env-radio-card")?.classList.add("disabled-option");
-                } else {
-                    r.checked = true;
-                }
+            r.disabled = (userRole === "viewer");
+            if (isDevOnly && r.value !== "dev") {
+                r.closest(".env-radio-card")?.classList.add("requires-approval-option");
+                r.title = "Cần Quản Trị Viên phê duyệt";
             } else {
-                r.disabled = (userRole === "viewer");
-                r.closest(".env-radio-card")?.classList.remove("disabled-option");
+                r.closest(".env-radio-card")?.classList.remove("requires-approval-option");
+                r.title = "";
             }
         });
+
+        // Tự động re-render lại cluster view & VM list để cập nhật các nút thao tác
+        if (cachedClusterData && cachedClusterData.length > 0) {
+            renderClusterView(cachedClusterData, currentSearchTerm);
+        }
+        loadVms();
+        if (window.lucide) window.lucide.createIcons();
     }
 
     checkAuthSession();
@@ -346,6 +361,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 loadVms();
                 applyRbacUiRestrictions();
+            } else if (targetId === "tab-approvals") {
+                loadQuotasAndApprovals();
             } else if (targetId === "tab-audit") {
                 loadAuditLogs();
             }
@@ -413,7 +430,8 @@ document.addEventListener("DOMContentLoaded", () => {
         document.body.removeChild(ta);
     }
 
-    function showToast(msg) {
+    // Helper Toast & RBAC Alert Box
+    window.showToast = (msg, type = "info") => {
         let toast = document.getElementById("appToast");
         if (!toast) {
             toast = document.createElement("div");
@@ -421,12 +439,17 @@ document.addEventListener("DOMContentLoaded", () => {
             toast.className = "app-toast";
             document.body.appendChild(toast);
         }
-        toast.textContent = msg;
-        toast.classList.add("show");
+        toast.className = `app-toast toast-${type} show`;
+        toast.innerHTML = (type === "error" ? "⛔ " : (type === "warning" ? "⚠️ " : "ℹ️ ")) + msg;
         setTimeout(() => {
             toast.classList.remove("show");
-        }, 2200);
-    }
+        }, type === "error" ? 4500 : 2500);
+    };
+
+    window.showRbacAlert = (message) => {
+        showToast(message, "error");
+        alert(message);
+    };
 
     // Helper Environment & Tags Badges
     function getEnvironmentTag(tags) {
@@ -742,26 +765,50 @@ document.addEventListener("DOMContentLoaded", () => {
                         </td>
                         <td class="text-right vm-actions-cell">
                             <div class="vm-action-btn-group">
-                                ${isRunning ? `
-                                    <button class="btn-power-op btn-power-reboot" onclick="triggerVmPower('${node.node}', ${vm.vmid}, 'reboot')" title="Khởi động lại an toàn (Reboot)">
-                                        <i data-lucide="rotate-cw" class="action-icon-xs"></i>
-                                    </button>
-                                    <button class="btn-power-op btn-power-stop" onclick="triggerVmPower('${node.node}', ${vm.vmid}, 'shutdown')" title="Tắt nguồn an toàn (ACPI Shutdown)">
-                                        <i data-lucide="power" class="action-icon-xs"></i>
-                                    </button>
-                                ` : `
-                                    <button class="btn-power-op btn-power-start" onclick="triggerVmPower('${node.node}', ${vm.vmid}, 'start')" title="Bật nguồn máy ảo (Start)">
-                                        <i data-lucide="play" class="action-icon-xs"></i>
-                                    </button>
-                                `}
-                                <button class="btn-action-sm btn-action-snap" onclick="openVmSnapshots('${node.node}', ${vm.vmid}, '${vm.name}')" title="Quản lý Snapshots">
-                                    <i data-lucide="camera" class="btn-icon-sm"></i>
-                                    <span>Snapshot</span>
-                                </button>
-                                <button class="btn-action-sm" onclick="showVmDetail('${node.node}', ${vm.vmid})" title="Xem cấu hình Proxmox">
-                                    <i data-lucide="eye" class="btn-icon-sm"></i>
-                                    <span>Chi tiết</span>
-                                </button>
+                                ${(() => {
+                                    const role = currentAuthUser ? currentAuthUser.role : "viewer";
+                                    const vmEnv = (vm.tags && Array.isArray(vm.tags) ? vm.tags.find(t => ["pro","prod","stag","staging","dev"].includes(t.toLowerCase())) : "dev") || "dev";
+                                    const isProdOrStag = ["pro","prod","stag","staging"].includes(vmEnv.toLowerCase());
+                                    const isDevForbidden = (role === "developer" && isProdOrStag);
+
+                                    if (role === "viewer") {
+                                        return `<span class="badge-optional" style="font-size:10.5px; opacity:0.6;"><i data-lucide="eye" style="width:11px;height:11px;"></i> Chỉ xem</span>`;
+                                    }
+
+                                    let powerBtns = "";
+                                    if (isDevForbidden) {
+                                        powerBtns = `<span class="badge-optional" title="Môi trường ${vmEnv.toUpperCase()} - Chỉ Admin mới có quyền điều khiển" style="font-size:10.5px; color:#f59e0b; border-color:rgba(245,158,11,0.3);"><i data-lucide="lock" style="width:11px;height:11px;"></i> ${vmEnv.toUpperCase()} Lock</span>`;
+                                    } else {
+                                        powerBtns = isRunning ? `
+                                            <button class="btn-power-op btn-power-reboot" onclick="triggerVmPower('${node.node}', ${vm.vmid}, 'reboot')" title="Khởi động lại an toàn (Reboot)">
+                                                <i data-lucide="rotate-cw" class="action-icon-xs"></i>
+                                            </button>
+                                            <button class="btn-power-op btn-power-stop" onclick="triggerVmPower('${node.node}', ${vm.vmid}, 'shutdown')" title="Tắt nguồn an toàn (ACPI Shutdown)">
+                                                <i data-lucide="power" class="action-icon-xs"></i>
+                                            </button>
+                                        ` : `
+                                            <button class="btn-power-op btn-power-start" onclick="triggerVmPower('${node.node}', ${vm.vmid}, 'start')" title="Bật nguồn máy ảo (Start)">
+                                                <i data-lucide="play" class="action-icon-xs"></i>
+                                            </button>
+                                        `;
+                                    }
+
+                                    const snapBtn = isDevForbidden ? '' : `
+                                        <button class="btn-action-sm btn-action-snap" onclick="openVmSnapshots('${node.node}', ${vm.vmid}, '${vm.name}')" title="Quản lý Snapshots">
+                                            <i data-lucide="camera" class="btn-icon-sm"></i>
+                                            <span>Snapshot</span>
+                                        </button>
+                                    `;
+
+                                    return `
+                                        ${powerBtns}
+                                        ${snapBtn}
+                                        <button class="btn-action-sm" onclick="showVmDetail('${node.node}', ${vm.vmid})" title="Xem cấu hình Proxmox">
+                                            <i data-lucide="eye" class="btn-icon-sm"></i>
+                                            <span>Chi tiết</span>
+                                        </button>
+                                    `;
+                                })()}
                             </div>
                         </td>
                     </tr>
@@ -1117,10 +1164,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (typeof loadClusterResources === "function") loadClusterResources();
                 }, 2500);
             } else {
-                alert(`Lỗi thao tác nguồn: ${data.error || "Không rõ nguyên nhân"}`);
+                showRbacAlert(`⛔ Lỗi thao tác nguồn: ${data.error || "Không rõ nguyên nhân"}`);
             }
         } catch (err) {
-            alert(`Lỗi kết nối tới Server: ${err.message}`);
+            showRbacAlert(`⛔ Lỗi kết nối tới Server: ${err.message}`);
         }
     };
 
@@ -1242,10 +1289,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (snapDescInput) snapDescInput.value = "";
                     await loadVmSnapshots();
                 } else {
-                    alert(`Lỗi tạo snapshot: ${data.error || "Không rõ nguyên nhân"}`);
+                    showRbacAlert(`⛔ Lỗi tạo snapshot: ${data.error || "Không rõ nguyên nhân"}`);
                 }
             } catch (err) {
-                alert(`Lỗi kết nối: ${err.message}`);
+                showRbacAlert(`⛔ Lỗi kết nối: ${err.message}`);
             } finally {
                 if (btnSubmit) btnSubmit.disabled = false;
             }
@@ -1269,10 +1316,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 await loadVmSnapshots();
                 if (typeof loadClusterResources === "function") loadClusterResources();
             } else {
-                alert(`Lỗi khôi phục snapshot: ${data.error || "Không rõ nguyên nhân"}`);
+                showRbacAlert(`⛔ Lỗi khôi phục snapshot: ${data.error || "Không rõ nguyên nhân"}`);
             }
         } catch (err) {
-            alert(`Lỗi kết nối: ${err.message}`);
+            showRbacAlert(`⛔ Lỗi kết nối: ${err.message}`);
         }
     };
 
@@ -1292,10 +1339,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 showToast(`✅ Đã xóa snapshot '${snapname}' thành công!`);
                 await loadVmSnapshots();
             } else {
-                alert(`Lỗi xóa snapshot: ${data.error || "Không rõ nguyên nhân"}`);
+                showRbacAlert(`⛔ Lỗi xóa snapshot: ${data.error || "Không rõ nguyên nhân"}`);
             }
         } catch (err) {
-            alert(`Lỗi kết nối: ${err.message}`);
+            showRbacAlert(`⛔ Lỗi kết nối: ${err.message}`);
         }
     };
 
@@ -1952,6 +1999,24 @@ document.addEventListener("DOMContentLoaded", () => {
                     const envBadge = renderEnvBadge(vm.environment);
                     const customTagsHtml = renderCustomTags(vm.tags);
 
+                    const role = currentAuthUser ? currentAuthUser.role : "viewer";
+                    const isProdOrStag = ["pro","prod","stag","staging"].includes((vm.environment || "dev").toLowerCase());
+                    const canDelete = role === "admin" || (role === "developer" && !isProdOrStag);
+
+                    let actionCellHtml = "";
+                    if (role === "viewer") {
+                        actionCellHtml = `<span class="badge-optional" style="font-size:11px; opacity:0.6;"><i data-lucide="lock" style="width:11px;height:11px;"></i> Chỉ xem</span>`;
+                    } else if (role === "developer" && isProdOrStag) {
+                        actionCellHtml = `<span class="badge-optional" title="Môi trường ${vm.environment.toUpperCase()} - Chỉ Admin mới có quyền xóa" style="font-size:11px; color:#ef4444; border-color:rgba(239,68,68,0.3);"><i data-lucide="shield-alert" style="width:11px;height:11px;"></i> Protected</span>`;
+                    } else {
+                        actionCellHtml = `
+                            <button class="btn-danger-sm" onclick="destroyVm('${vm.stackName}', ${vm.protection})">
+                                <i data-lucide="trash" class="btn-icon-sm"></i>
+                                Xóa
+                            </button>
+                        `;
+                    }
+
                     return `
                         <tr>
                             <td>
@@ -1968,10 +2033,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             <td>${vmIpBadges}</td>
                             <td><span class="tag-deployed"><i data-lucide="check-circle" class="badge-svg"></i> ${vm.status}</span></td>
                             <td class="text-right">
-                                <button class="btn-danger-sm" onclick="destroyVm('${vm.stackName}', ${vm.protection})">
-                                    <i data-lucide="trash" class="btn-icon-sm"></i>
-                                    Xóa
-                                </button>
+                                ${actionCellHtml}
                             </td>
                         </tr>
                     `;
@@ -2075,20 +2137,210 @@ runcmd:
   - echo "Security hardening completed." > /root/hardening.log`
     };
 
-    window.applyScriptPreset = (type) => {
+    // ==========================================
+    // WORKLOAD TYPE & APP CATALOG STACKS
+    // ==========================================
+    window.handleResourceTypeChange = (type) => {
+        const cardQemu = document.getElementById("cardTypeQemu");
+        const cardLxc = document.getElementById("cardTypeLxc");
+        const instanceLabel = document.getElementById("instanceNameLabel");
+        const vmNameInput = document.getElementById("vmName");
+
+        if (type === "lxc") {
+            cardLxc?.classList.add("active");
+            cardQemu?.classList.remove("active");
+            if (instanceLabel) instanceLabel.textContent = "Tên Container / Tiền Tố (LXC Base Name)";
+            if (vmNameInput && !vmNameInput.value) vmNameInput.placeholder = "vd: lxc-redis, lxc-nginx, lxc-node...";
+            // Gợi ý phần cứng nhẹ cho LXC
+            applyHardwarePreset(1, 1, 8);
+            showToast("📦 Đã chọn chế độ 'LXC Container' (Siêu nhẹ, tối ưu RAM/CPU)!");
+        } else {
+            cardQemu?.classList.add("active");
+            cardLxc?.classList.remove("active");
+            if (instanceLabel) instanceLabel.textContent = "Tên Máy Ảo / Tiền Tố (VM Base Name)";
+            if (vmNameInput && !vmNameInput.value) vmNameInput.placeholder = "vd: ubuntu-server, db-master, k8s-node...";
+            applyHardwarePreset(2, 2, 20);
+            showToast("🖥️ Đã chọn chế độ 'QEMU Virtual Machine' (Hệ điều hành độc lập)!");
+        }
+    };
+
+    const appCatalogStacks = {
+        postgres: {
+            name: "pg-cluster",
+            cores: 2,
+            ramGb: 4,
+            diskGb: 40,
+            tags: "database, postgresql, ha",
+            script: `#cloud-config
+# ===================================================
+# 🐘 1-Click PostgreSQL 16 Enterprise Production Stack
+# ===================================================
+package_update: true
+packages:
+  - qemu-guest-agent
+  - curl
+  - ca-certificates
+  - gnupg
+  - ufw
+runcmd:
+  - systemctl enable --now qemu-guest-agent
+  - install -d /etc/apt/keyrings
+  - curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /etc/apt/keyrings/postgresql.gpg
+  - echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list
+  - apt-get update -y
+  - apt-get install -y postgresql-16 postgresql-contrib-16
+  - systemctl enable --now postgresql
+  - sudo -u postgres psql -c "CREATE DATABASE appdb;"
+  - sudo -u postgres psql -c "CREATE USER appuser WITH ENCRYPTED PASSWORD 'AppSecurePass#2026';"
+  - sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE appdb TO appuser;"
+  - sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" /etc/postgresql/16/main/postgresql.conf
+  - echo "host all all 0.0.0.0/0 md5" >> /etc/postgresql/16/main/pg_hba.conf
+  - systemctl restart postgresql
+  - ufw allow 5432/tcp
+  - ufw allow 22/tcp
+  - ufw --force enable
+  - echo "PostgreSQL 16 Enterprise deployed successfully." > /root/app_stack.log`
+        },
+
+        redis: {
+            name: "redis-sentinel",
+            cores: 2,
+            ramGb: 2,
+            diskGb: 20,
+            tags: "cache, redis, in-memory",
+            script: `#cloud-config
+# ===================================================
+# ⚡ 1-Click Redis 7 High-Performance Cache & Sentinel
+# ===================================================
+package_update: true
+packages:
+  - qemu-guest-agent
+  - redis-server
+  - redis-sentinel
+  - ufw
+runcmd:
+  - systemctl enable --now qemu-guest-agent
+  - sed -i 's/bind 127.0.0.1 ::1/bind 0.0.0.0/g' /etc/redis/redis.conf
+  - sed -i 's/protected-mode yes/protected-mode no/g' /etc/redis/redis.conf
+  - echo "requirepass RedisSecurePass#2026" >> /etc/redis/redis.conf
+  - echo "maxmemory 1500mb" >> /etc/redis/redis.conf
+  - echo "maxmemory-policy allkeys-lru" >> /etc/redis/redis.conf
+  - systemctl restart redis-server
+  - systemctl enable --now redis-server
+  - ufw allow 6379/tcp
+  - ufw allow 26379/tcp
+  - ufw allow 22/tcp
+  - ufw --force enable
+  - echo "Redis 7 In-Memory Cache active on port 6379." > /root/app_stack.log`
+        },
+
+        minio: {
+            name: "minio-s3",
+            cores: 2,
+            ramGb: 4,
+            diskGb: 50,
+            tags: "storage, s3, minio",
+            script: `#cloud-config
+# ===================================================
+# 🪣 1-Click MinIO Enterprise S3 Compatible Storage
+# ===================================================
+package_update: true
+packages:
+  - qemu-guest-agent
+  - curl
+  - ufw
+runcmd:
+  - systemctl enable --now qemu-guest-agent
+  - curl -O https://dl.min.io/server/minio/release/linux-amd64/minio
+  - chmod +x minio && mv minio /usr/local/bin/
+  - useradd -r minio-user -s /sbin/nologin
+  - mkdir -p /data/minio && chown -R minio-user:minio-user /data/minio
+  - mkdir -p /etc/minio
+  - |
+    cat << 'EOF' > /etc/minio/minio.conf
+    MINIO_ROOT_USER=minioadmin
+    MINIO_ROOT_PASSWORD=MinioSecurePassword#2026
+    MINIO_VOLUMES="/data/minio"
+    MINIO_OPTS="--console-address :9001"
+    EOF
+  - |
+    cat << 'EOF' > /etc/systemd/system/minio.service
+    [Unit]
+    Description=MinIO Object Storage
+    Documentation=https://min.io/docs/minio/linux/index.html
+    Wants=network-online.target
+    After=network-online.target
+
+    [Service]
+    WorkingDirectory=/usr/local/
+    User=minio-user
+    Group=minio-user
+    EnvironmentFile=/etc/minio/minio.conf
+    ExecStart=/usr/local/bin/minio server $MINIO_OPTS $MINIO_VOLUMES
+    Restart=always
+    LimitNOFILE=65536
+
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+  - systemctl daemon-reload
+  - systemctl enable --now minio
+  - ufw allow 9000/tcp
+  - ufw allow 9001/tcp
+  - ufw allow 22/tcp
+  - ufw --force enable
+  - echo "MinIO S3 active on port 9000 & Web Console on port 9001." > /root/app_stack.log`
+        },
+
+        k3s: {
+            name: "k3s-node",
+            cores: 4,
+            ramGb: 8,
+            diskGb: 60,
+            tags: "k8s, kubernetes, k3s",
+            script: `#cloud-config
+# ===================================================
+# ⛵ 1-Click Lightweight Kubernetes Node (k3s)
+# ===================================================
+package_update: true
+packages:
+  - qemu-guest-agent
+  - curl
+  - iptables
+  - ufw
+runcmd:
+  - systemctl enable --now qemu-guest-agent
+  - curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644
+  - mkdir -p /root/.kube && cp /etc/rancher/k3s/k3s.yaml /root/.kube/config
+  - ufw allow 6443/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw allow 22/tcp
+  - ufw --force enable
+  - echo "Kubernetes (k3s) single-node cluster ready. Kubeconfig at /etc/rancher/k3s/k3s.yaml." > /root/app_stack.log`
+        }
+    };
+
+    window.applyAppCatalog = (stackKey) => {
+        const stack = appCatalogStacks[stackKey];
+        if (!stack) return;
+
+        const vmNameInput = document.getElementById("vmName");
+        const tagsInput = document.getElementById("customTags");
         const userDataTextarea = document.getElementById("userData");
-        if (!userDataTextarea) return;
 
-        if (type === "clear") {
-            userDataTextarea.value = "";
-            showToast("Đã xóa nội dung script cấu hình.");
-            return;
+        if (vmNameInput && !vmNameInput.value) {
+            vmNameInput.value = `${stack.name}-${Math.random().toString(36).substring(2, 5)}`;
         }
+        if (tagsInput) tagsInput.value = stack.tags;
+        if (userDataTextarea) userDataTextarea.value = stack.script;
 
-        if (scriptPresets[type]) {
-            userDataTextarea.value = scriptPresets[type];
-            showToast(`Đã áp dụng mẫu cấu hình '${type.toUpperCase()}'!`);
-        }
+        applyHardwarePreset(stack.cores, stack.ramGb, stack.diskGb);
+
+        document.querySelectorAll(".app-catalog-card").forEach(c => c.classList.remove("active"));
+        event?.currentTarget?.classList.add("active");
+
+        showToast(`🚀 Đã nạp trọn bộ Stack ứng dụng '${stackKey.toUpperCase()}' kèm phần cứng & bootstrap script!`);
     };
 
     window.applyHardwarePreset = (cores, ramGb, diskGb) => {
@@ -2267,9 +2519,12 @@ runcmd:
 
         let payload;
 
+        const resourceType = formData.get("resourceType") || "qemu";
+
         if (count === 1) {
             payload = {
                 name: rawBaseName,
+                resourceType,
                 nodeName: formData.get("nodeName") || "node01",
                 environment,
                 tags,
@@ -2319,6 +2574,7 @@ runcmd:
                 const assignedNode = selectedNodes[(i - 1) % selectedNodes.length];
                 vmsList.push({
                     name: vmName,
+                    resourceType,
                     nodeName: assignedNode,
                     environment,
                     tags,
@@ -2352,14 +2608,23 @@ runcmd:
             const result = await res.json();
 
             if (result.success) {
-                appendLog(`[Portal] ${result.message}`);
-                // Chuyển sang tab Logs để xem
-                document.querySelector('.nav-tab[data-tab="tab-logs"]').click();
-                setTimeout(loadVms, 3000);
+                if (result.requiresApproval) {
+                    showToast(result.message);
+                    appendLog(`[APPROVAL QUEUE] ${result.message}`);
+                    document.querySelector('.nav-tab[data-tab="tab-approvals"]').click();
+                    loadQuotasAndApprovals();
+                } else {
+                    appendLog(`[Portal] ${result.message}`);
+                    // Chuyển sang tab Logs để xem
+                    document.querySelector('.nav-tab[data-tab="tab-logs"]').click();
+                    setTimeout(loadVms, 3000);
+                }
             } else {
+                showRbacAlert(`⛔ ${result.error}`);
                 appendLog(`[Portal Error] ${result.error}`);
             }
         } catch (err) {
+            showRbacAlert(`⛔ Lỗi kết nối tới Server: ${err.message}`);
             appendLog(`[Portal Error] ${err.message}`);
         } finally {
             btnSubmit.disabled = false;
@@ -2426,8 +2691,205 @@ runcmd:
         }
     }
 
-    if (btnRefreshAudit) {
-        btnRefreshAudit.addEventListener("click", loadAuditLogs);
+    // ==========================================
+    // RESOURCE QUOTAS & APPROVAL WORKFLOW
+    // ==========================================
+    const approvalsTableBody = document.getElementById("approvalsTableBody");
+    const btnRefreshApprovals = document.getElementById("btnRefreshApprovals");
+    const approvalBadgeCount = document.getElementById("approvalBadgeCount");
+
+    const quotaVmDisplay = document.getElementById("quotaVmDisplay");
+    const quotaVmBar = document.getElementById("quotaVmBar");
+    const quotaVmFooter = document.getElementById("quotaVmFooter");
+
+    const quotaCpuDisplay = document.getElementById("quotaCpuDisplay");
+    const quotaCpuBar = document.getElementById("quotaCpuBar");
+    const quotaCpuFooter = document.getElementById("quotaCpuFooter");
+
+    const quotaRamDisplay = document.getElementById("quotaRamDisplay");
+    const quotaRamBar = document.getElementById("quotaRamBar");
+    const quotaRamFooter = document.getElementById("quotaRamFooter");
+
+    async function loadQuotasAndApprovals() {
+        if (!currentAuthToken) return;
+
+        // 1. Tải Quota & Usage
+        try {
+            const quotaRes = await fetch("/api/quotas/me", { headers: getAuthHeaders() });
+            const quotaData = await quotaRes.json();
+            if (quotaData.success && quotaData.data) {
+                const { quota, usage, isAdmin } = quotaData.data;
+
+                if (isAdmin) {
+                    if (quotaVmDisplay) quotaVmDisplay.textContent = `${usage.vms} VMs (Không Giới Hạn)`;
+                    if (quotaVmBar) { quotaVmBar.style.width = "100%"; quotaVmBar.className = "progress-bar-fill"; }
+                    if (quotaVmFooter) quotaVmFooter.textContent = `Tài khoản Administrator không bị áp hạn mức`;
+
+                    if (quotaCpuDisplay) quotaCpuDisplay.textContent = `${usage.cores} vCPUs (Không Giới Hạn)`;
+                    if (quotaCpuBar) { quotaCpuBar.style.width = "100%"; quotaCpuBar.className = "progress-bar-fill"; }
+                    if (quotaCpuFooter) quotaCpuFooter.textContent = `Toàn quyền phân bổ CPU trên toàn cụm`;
+
+                    if (quotaRamDisplay) quotaRamDisplay.textContent = `${(usage.memoryMb / 1024).toFixed(1)} GB (Không Giới Hạn)`;
+                    if (quotaRamBar) { quotaRamBar.style.width = "100%"; quotaRamBar.className = "progress-bar-fill"; }
+                    if (quotaRamFooter) quotaRamFooter.textContent = `Toàn quyền phân bổ RAM trên toàn cụm`;
+                } else {
+                    // Quota VMs
+                    const vmPercent = Math.min(100, Math.round((usage.vms / quota.maxVms) * 100));
+                    if (quotaVmDisplay) quotaVmDisplay.textContent = `${usage.vms} / ${quota.maxVms} VMs`;
+                    if (quotaVmBar) {
+                        quotaVmBar.style.width = `${vmPercent}%`;
+                        quotaVmBar.className = `progress-bar-fill ${vmPercent >= 100 ? 'danger' : (vmPercent >= 75 ? 'warning' : '')}`;
+                    }
+                    if (quotaVmFooter) quotaVmFooter.textContent = `Đã sử dụng ${usage.vms} trong tối đa ${quota.maxVms} VMs`;
+
+                    // Quota CPU
+                    const cpuPercent = Math.min(100, Math.round((usage.cores / quota.maxCores) * 100));
+                    if (quotaCpuDisplay) quotaCpuDisplay.textContent = `${usage.cores} / ${quota.maxCores} vCPUs`;
+                    if (quotaCpuBar) {
+                        quotaCpuBar.style.width = `${cpuPercent}%`;
+                        quotaCpuBar.className = `progress-bar-fill ${cpuPercent >= 100 ? 'danger' : (cpuPercent >= 75 ? 'warning' : '')}`;
+                    }
+                    if (quotaCpuFooter) quotaCpuFooter.textContent = `Đã cấp ${usage.cores} trong tối đa ${quota.maxCores} vCPUs`;
+
+                    // Quota RAM
+                    const ramUsedGb = (usage.memoryMb / 1024).toFixed(1);
+                    const ramMaxGb = (quota.maxMemoryMb / 1024).toFixed(1);
+                    const ramPercent = Math.min(100, Math.round((usage.memoryMb / quota.maxMemoryMb) * 100));
+                    if (quotaRamDisplay) quotaRamDisplay.textContent = `${ramUsedGb} / ${ramMaxGb} GB`;
+                    if (quotaRamBar) {
+                        quotaRamBar.style.width = `${ramPercent}%`;
+                        quotaRamBar.className = `progress-bar-fill ${ramPercent >= 100 ? 'danger' : (ramPercent >= 75 ? 'warning' : '')}`;
+                    }
+                    if (quotaRamFooter) quotaRamFooter.textContent = `Đang dùng ${usage.memoryMb} MB trong tối đa ${quota.maxMemoryMb} MB RAM`;
+                }
+            }
+        } catch (err) {
+            console.error("Lỗi tải Quotas:", err);
+        }
+
+        // 2. Tải Danh Sách Yêu Cầu Phê Duyệt
+        if (!approvalsTableBody) return;
+        try {
+            const appRes = await fetch("/api/approvals", { headers: getAuthHeaders() });
+            const appData = await appRes.json();
+
+            if (appData.success && Array.isArray(appData.data)) {
+                const requests = appData.data;
+                const pendingCount = requests.filter(r => r.status === "PENDING").length;
+
+                if (approvalBadgeCount) {
+                    if (pendingCount > 0) {
+                        approvalBadgeCount.textContent = pendingCount;
+                        approvalBadgeCount.classList.remove("hidden");
+                    } else {
+                        approvalBadgeCount.classList.add("hidden");
+                    }
+                }
+
+                if (requests.length === 0) {
+                    approvalsTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding: 24px;">Hiện không có yêu cầu phê duyệt nào</td></tr>`;
+                    return;
+                }
+
+                const isAdmin = currentAuthUser && currentAuthUser.role === "admin";
+
+                approvalsTableBody.innerHTML = requests.map(req => {
+                    const timeStr = req.createdAt ? new Date(req.createdAt).toLocaleString() : "-";
+                    const isPending = req.status === "PENDING";
+                    const isApproved = req.status === "APPROVED";
+                    const isRejected = req.status === "REJECTED";
+
+                    let statusBadge = `<span class="tag-env tag-env-stag"><i data-lucide="clock" class="badge-svg"></i> Chờ Admin Duyệt</span>`;
+                    if (isApproved) {
+                        statusBadge = `<span class="tag-deployed"><i data-lucide="check-circle" class="badge-svg"></i> Đã Duyệt (${req.resolvedBy || 'Admin'})</span>`;
+                    } else if (isRejected) {
+                        statusBadge = `<span class="tag-env tag-env-pro"><i data-lucide="x-circle" class="badge-svg"></i> Bị Từ Chối</span>`;
+                    }
+
+                    const envStr = req.vms && req.vms[0] ? (req.vms[0].environment || "dev").toUpperCase() : "DEV";
+                    const vmsNames = req.vms ? req.vms.map(v => `<code>${v.name}</code> (${v.cores}c / ${v.memoryMb}MB)`).join("<br>") : "-";
+
+                    let actionHtml = `<span class="text-muted" style="font-size:12px;">—</span>`;
+                    if (isPending && isAdmin) {
+                        actionHtml = `
+                            <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                                <button class="btn-action-approve" onclick="handleApprovalAction('${req.id}', 'approve')">
+                                    <i data-lucide="check" style="width:14px;height:14px;"></i> Phê Duyệt
+                                </button>
+                                <button class="btn-action-reject" onclick="handleApprovalAction('${req.id}', 'reject')">
+                                    <i data-lucide="x" style="width:14px;height:14px;"></i> Từ Chối
+                                </button>
+                            </div>
+                        `;
+                    } else if (isRejected && req.rejectionReason) {
+                        actionHtml = `<span class="text-danger" style="font-size:11.5px;">Lý do: ${req.rejectionReason}</span>`;
+                    }
+
+                    return `
+                        <tr>
+                            <td>
+                                <strong style="font-family:'JetBrains Mono',monospace; color:#38bdf8;">${req.id}</strong>
+                                <div style="font-size:11px; color:#94a3b8; margin-top:2px;">${timeStr}</div>
+                            </td>
+                            <td>
+                                <strong>${req.requestedBy.displayName || req.requestedBy.username}</strong>
+                                <div style="font-size:11px; color:#a5b4fc; text-transform:uppercase;">${req.requestedBy.role}</div>
+                            </td>
+                            <td style="font-size:12px; line-height:1.5;">${vmsNames}</td>
+                            <td>${renderEnvBadge(envStr.toLowerCase())}</td>
+                            <td style="font-size:12px; color:#cbd5e1; max-width:240px; line-height:1.4;">
+                                <strong>${req.reason === "ENV_RESTRICTION" ? "🛡️ Môi Trường Giới Hạn" : "⚠️ Vượt Hạn Mức Quota"}</strong>
+                                <div style="font-size:11.5px; color:#94a3b8; margin-top:2px;">${req.reasonDetails}</div>
+                            </td>
+                            <td>${statusBadge}</td>
+                            <td class="text-right">${actionHtml}</td>
+                        </tr>
+                    `;
+                }).join("");
+
+                if (window.lucide) window.lucide.createIcons();
+            }
+        } catch (err) {
+            approvalsTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-danger" style="padding: 24px;">Lỗi tải Approval Requests: ${err.message}</td></tr>`;
+        }
+    }
+
+    window.handleApprovalAction = async (requestId, action) => {
+        let rejectionReason = "";
+        if (action === "reject") {
+            const promptVal = prompt("Vui lòng nhập lý do từ chối yêu cầu này:", "Vượt ngân sách hoặc không đúng mục đích");
+            if (promptVal === null) return;
+            rejectionReason = promptVal;
+        } else {
+            if (!confirm(`Bạn có chắc chắn muốn PHÊ DUYỆT yêu cầu '${requestId}' và kích hoạt Pulumi Engine khởi tạo máy ảo không?`)) return;
+        }
+
+        try {
+            const res = await fetch(`/api/approvals/${requestId}/${action}`, {
+                method: "POST",
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ rejectionReason })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                showToast(data.message || `Đã xử lý yêu cầu thành công!`);
+                loadQuotasAndApprovals();
+                loadAuditLogs();
+                if (action === "approve") {
+                    document.querySelector('.nav-tab[data-tab="tab-logs"]').click();
+                    setTimeout(loadVms, 3000);
+                }
+            } else {
+                alert(`Lỗi: ${data.error}`);
+            }
+        } catch (err) {
+            alert(`Lỗi kết nối: ${err.message}`);
+        }
+    };
+
+    if (btnRefreshApprovals) {
+        btnRefreshApprovals.addEventListener("click", loadQuotasAndApprovals);
     }
 
     window.destroyVm = async (stackName, isProtected) => {
@@ -2443,18 +2905,23 @@ runcmd:
         }
 
         try {
-            const res = await fetch(`/api/vms/${stackName}${force ? '?force=true' : ''}`, { method: "DELETE" });
+            const res = await fetch(`/api/vms/${stackName}${force ? '?force=true' : ''}`, { 
+                method: "DELETE",
+                headers: getAuthHeaders()
+            });
             const result = await res.json();
             
             if (result.success) {
+                showToast(`🗑️ Đang tiến hành hủy máy ảo thuộc stack '${stackName}'...`);
                 appendLog(`[Portal] ${result.message}`);
                 document.querySelector('.nav-tab[data-tab="tab-logs"]').click();
             } else {
-                alert(`Không thể xóa: ${result.error}`);
+                showRbacAlert(`⛔ Không thể xóa: ${result.error}`);
                 appendLog(`[Portal Error] ${result.error}`);
             }
             setTimeout(loadVms, 3000);
         } catch (err) {
+            showRbacAlert(`⛔ Lỗi kết nối: ${err.message}`);
             appendLog(`[Portal Error] ${err.message}`);
         }
     };

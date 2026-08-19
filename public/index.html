@@ -39,6 +39,11 @@
                     <i data-lucide="terminal" class="btn-icon-sm"></i>
                     <span>Live Console</span>
                 </button>
+                <button class="nav-tab" data-tab="tab-approvals">
+                    <i data-lucide="check-square" class="btn-icon-sm"></i>
+                    <span>Phê Duyệt & Quota</span>
+                    <span id="approvalBadgeCount" class="badge-count hidden">0</span>
+                </button>
                 <button class="nav-tab" data-tab="tab-audit">
                     <i data-lucide="shield-check" class="btn-icon-sm"></i>
                     <span>Audit Logs</span>
@@ -125,14 +130,40 @@
                             </summary>
 
                             <div class="details-content-body">
-                                <div class="form-row" style="margin-top: 12px;">
+                                <!-- Resource Type Selector: QEMU VM vs LXC Container -->
+                                <div class="form-group" style="margin-top: 12px; margin-bottom: 12px;">
+                                    <label>
+                                        <i data-lucide="box" class="field-icon"></i>
+                                        <span>Loại Tài Nguyên Triển Khai (Workload Type)</span>
+                                    </label>
+                                    <div class="env-selector-grid" style="grid-template-columns: 1fr 1fr;">
+                                        <label class="env-radio-card env-card-qemu active" id="cardTypeQemu">
+                                            <input type="radio" name="resourceType" value="qemu" checked onchange="handleResourceTypeChange('qemu')">
+                                            <i data-lucide="server" class="env-indicator-icon"></i>
+                                            <div>
+                                                <strong style="display:block; font-size:13px; color:#fff;">QEMU Virtual Machine</strong>
+                                                <small style="font-size:11px; color:#94a3b8;">Hệ điều hành đầy đủ, Kernel riêng, Cloud-Init</small>
+                                            </div>
+                                        </label>
+                                        <label class="env-radio-card env-card-lxc" id="cardTypeLxc">
+                                            <input type="radio" name="resourceType" value="lxc" onchange="handleResourceTypeChange('lxc')">
+                                            <i data-lucide="box" class="env-indicator-icon"></i>
+                                            <div>
+                                                <strong style="display:block; font-size:13px; color:#fff;">LXC Container</strong>
+                                                <small style="font-size:11px; color:#94a3b8;">Siêu nhẹ, khởi động tức thì, tiết kiệm RAM/CPU</small>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="form-row" style="margin-top: 8px;">
                                     <div class="form-group flex-2">
                                         <label for="vmName">
                                             <i data-lucide="tag" class="field-icon"></i>
-                                            <span>Tên Máy Ảo / Tiền Tố (VM Base Name)</span>
+                                            <span id="instanceNameLabel">Tên Máy Ảo / Tiền Tố (Instance Base Name)</span>
                                             <span class="required-star">*</span>
                                         </label>
-                                        <input type="text" id="vmName" name="name" placeholder="vd: ubuntu-server, db-master, k8s-node..." required>
+                                        <input type="text" id="vmName" name="name" placeholder="vd: ubuntu-server, db-master, redis-node..." required>
                                     </div>
                                     <div class="form-group flex-1">
                                         <div class="label-with-value">
@@ -430,17 +461,58 @@
                                     <textarea id="sshPublicKey" name="sshPublicKey" rows="2" placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5..."></textarea>
                                 </div>
 
+                                <!-- App Catalog & 1-Click Stacks -->
+                                <div class="form-group" style="margin-top: 10px; margin-bottom: 12px;">
+                                    <div class="label-with-value">
+                                        <label>
+                                            <i data-lucide="layers" class="field-icon"></i>
+                                            <span>Thư Viện Ứng Dụng Hoàn Chỉnh (1-Click App Catalog)</span>
+                                        </label>
+                                        <span class="badge-optional" style="color: #38bdf8; border-color: rgba(56, 189, 248, 0.3);">Tự động cài đặt & cấu hình</span>
+                                    </div>
+                                    <div class="app-catalog-grid">
+                                        <div class="app-catalog-card" onclick="applyAppCatalog('postgres')">
+                                            <div class="app-card-icon"><i data-lucide="database"></i></div>
+                                            <div class="app-card-info">
+                                                <strong>PostgreSQL 16</strong>
+                                                <small>Cơ sở dữ liệu SQL, tự tạo user & db</small>
+                                            </div>
+                                        </div>
+                                        <div class="app-catalog-card" onclick="applyAppCatalog('redis')">
+                                            <div class="app-card-icon"><i data-lucide="zap"></i></div>
+                                            <div class="app-card-info">
+                                                <strong>Redis In-Memory</strong>
+                                                <small>Cache & Sentinel, tối ưu bộ nhớ</small>
+                                            </div>
+                                        </div>
+                                        <div class="app-catalog-card" onclick="applyAppCatalog('minio')">
+                                            <div class="app-card-icon"><i data-lucide="hard-drive"></i></div>
+                                            <div class="app-card-info">
+                                                <strong>MinIO Object Storage</strong>
+                                                <small>S3 Compatible Storage & Web Console</small>
+                                            </div>
+                                        </div>
+                                        <div class="app-catalog-card" onclick="applyAppCatalog('k3s')">
+                                            <div class="app-card-icon"><i data-lucide="boxes"></i></div>
+                                            <div class="app-card-info">
+                                                <strong>Kubernetes (k3s Node)</strong>
+                                                <small>K3s lightweight cluster node</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <!-- Post-provisioning Hooks & Cloud-Init User-Data -->
                                 <div class="form-group post-prov-box">
                                     <div class="label-with-value">
                                         <label for="userData">
                                             <i data-lucide="code" class="field-icon"></i>
-                                            Script Cấu Hình Cloud-Init (User-Data)
+                                            Script Cấu Hình Khởi Động (Cloud-Init / Post-Boot)
                                         </label>
                                         <span class="badge-optional">Cloud-Init / Shell</span>
                                     </div>
                                     <div class="script-presets-bar">
-                                        <span class="presets-label">Mẫu cấu hình:</span>
+                                        <span class="presets-label">Mẫu nhanh:</span>
                                         <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('debian')">Debian Root SSH</button>
                                         <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('qemu')">QEMU Guest Agent</button>
                                         <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('docker')">Docker Engine</button>
@@ -448,7 +520,7 @@
                                         <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('security')">UFW Firewall</button>
                                         <button type="button" class="btn-preset-chip btn-preset-clear" onclick="applyScriptPreset('clear')">Xóa script</button>
                                     </div>
-                                    <textarea id="userData" name="userData" rows="5" class="code-textarea" placeholder="#cloud-config hoặc script #!/bin/bash..."></textarea>
+                                    <textarea id="userData" name="userData" rows="6" class="code-textarea" placeholder="#cloud-config hoặc script #!/bin/bash..."></textarea>
                                 </div>
 
                                 <div class="form-options" style="margin-bottom: 8px;">
@@ -583,6 +655,94 @@
                         <tbody id="auditTableBody">
                             <tr>
                                 <td colspan="7" class="text-center text-muted" style="padding: 24px;">Đang tải nhật ký kiểm toán...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </section>
+
+        <!-- TAB 5: RESOURCE QUOTAS & APPROVAL WORKFLOW -->
+        <section id="tab-approvals" class="tab-content">
+            <!-- Quota Summary Cards -->
+            <div class="quota-overview-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 20px;">
+                <div class="card stat-card-quota">
+                    <div class="stat-header">
+                        <span class="stat-title">Hạn Mức Máy Ảo (VMs Quota)</span>
+                        <i data-lucide="server" class="stat-icon-quota"></i>
+                    </div>
+                    <div class="stat-body">
+                        <div class="stat-number" id="quotaVmDisplay">0 / 2 VMs</div>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" id="quotaVmBar" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                    <div class="stat-footer-text" id="quotaVmFooter">Đang sử dụng 0 máy ảo</div>
+                </div>
+
+                <div class="card stat-card-quota">
+                    <div class="stat-header">
+                        <span class="stat-title">Hạn Mức CPU (vCPU Quota)</span>
+                        <i data-lucide="cpu" class="stat-icon-quota"></i>
+                    </div>
+                    <div class="stat-body">
+                        <div class="stat-number" id="quotaCpuDisplay">0 / 4 vCPUs</div>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" id="quotaCpuBar" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                    <div class="stat-footer-text" id="quotaCpuFooter">Đang phân bổ 0 vCPUs</div>
+                </div>
+
+                <div class="card stat-card-quota">
+                    <div class="stat-header">
+                        <span class="stat-title">Hạn Mức Bộ Nhớ (RAM Quota)</span>
+                        <i data-lucide="layers" class="stat-icon-quota"></i>
+                    </div>
+                    <div class="stat-body">
+                        <div class="stat-number" id="quotaRamDisplay">0 / 8 GB</div>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" id="quotaRamBar" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                    <div class="stat-footer-text" id="quotaRamFooter">Đang sử dụng 0 MB RAM</div>
+                </div>
+            </div>
+
+            <!-- Approval Requests List -->
+            <section class="card">
+                <div class="card-header flex-between">
+                    <div>
+                        <div class="card-title-group">
+                            <i data-lucide="check-square" class="icon-accent"></i>
+                            <h2>Hàng Đợi Phê Duyệt Khởi Tạo VM (Approval Gateway)</h2>
+                        </div>
+                        <p>Yêu cầu khởi tạo máy ảo trên môi trường STAGING/PROD hoặc vượt Quota cần Admin phê duyệt trước khi Pulumi kích hoạt</p>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button id="btnRefreshApprovals" class="btn-secondary">
+                            <i data-lucide="refresh-cw" class="btn-icon-sm"></i>
+                            <span>Làm mới yêu cầu</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-responsive" style="margin-top: 10px;">
+                    <table class="vms-overview-table">
+                        <thead>
+                            <tr>
+                                <th style="min-width: 130px;">Mã Yêu Cầu</th>
+                                <th style="min-width: 140px;">Người Yêu Cầu</th>
+                                <th style="min-width: 150px;">Danh Sách Máy Ảo</th>
+                                <th style="min-width: 90px;">Môi Trường</th>
+                                <th style="min-width: 160px;">Lý Do Cần Phê Duyệt</th>
+                                <th style="min-width: 110px;">Trạng Thái</th>
+                                <th style="min-width: 160px;" class="text-right">Thao Tác Admin</th>
+                            </tr>
+                        </thead>
+                        <tbody id="approvalsTableBody">
+                            <tr>
+                                <td colspan="7" class="text-center text-muted" style="padding: 24px;">Đang tải danh sách yêu cầu phê duyệt...</td>
                             </tr>
                         </tbody>
                     </table>
