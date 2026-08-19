@@ -33,6 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // ==========================================
     let currentAuthToken = localStorage.getItem("pulumi_auth_token") || "";
     let currentAuthUser = null;
+    let currentAlertData = null;
 
     const loginModal = document.getElementById("loginModal");
     const loginForm = document.getElementById("loginForm");
@@ -92,8 +93,98 @@ document.addEventListener("DOMContentLoaded", () => {
         return headers;
     };
 
+    // ==========================================
+    // SSO & CENTRALIZED AUTHENTICATION STATE
+    // ==========================================
+    const urlParams = new URLSearchParams(window.location.search);
+    const callbackToken = urlParams.get("token");
+    const authError = urlParams.get("auth_error");
+
+    if (callbackToken) {
+        localStorage.setItem("pulumi_auth_token", callbackToken);
+        currentAuthToken = callbackToken;
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    if (authError) {
+        const ssoErrorBanner = document.getElementById("ssoErrorBanner");
+        const ssoErrorText = document.getElementById("ssoErrorText");
+        if (ssoErrorBanner && ssoErrorText) {
+            ssoErrorText.textContent = authError;
+            ssoErrorBanner.classList.remove("hidden");
+        }
+        showToast(`⛔ Đăng nhập thất bại: ${authError}`);
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    window.initiateSsoLogin = async (provider) => {
+        try {
+            const res = await fetch(`/api/auth/login/${provider}?returnUrl=/`, {
+                headers: { "Accept": "application/json" }
+            });
+            const data = await res.json();
+            if (data.success && data.authUrl) {
+                window.location.href = data.authUrl;
+            } else {
+                showToast(`⛔ Lỗi khởi tạo SSO: ${data.error || 'Không nhận được authUrl'}`);
+            }
+        } catch (err) {
+            window.location.href = `/api/auth/login/${provider}`;
+        }
+    };
+
+    async function loadAuthProviders() {
+        try {
+            const res = await fetch("/api/auth/providers");
+            const data = await res.json();
+            if (data.success && Array.isArray(data.data)) {
+                const ssoProviders = data.data.filter(p => p.id !== "local" && p.enabled);
+                const ssoSection = document.getElementById("ssoSection");
+                const ssoDivider = document.querySelector(".sso-divider");
+                const ssoButtonsContainer = document.getElementById("ssoButtonsContainer");
+
+                if (ssoProviders.length === 0) {
+                    if (ssoSection) ssoSection.style.display = "none";
+                    if (ssoDivider) ssoDivider.style.display = "none";
+                } else {
+                    if (ssoSection) ssoSection.style.display = "block";
+                    if (ssoDivider) ssoDivider.style.display = "flex";
+                    if (ssoButtonsContainer) {
+                        ssoButtonsContainer.innerHTML = ssoProviders.map(p => {
+                            if (p.id === "google") {
+                                return `
+                                    <button type="button" class="btn-sso btn-sso-google" onclick="initiateSsoLogin('google')">
+                                        <svg class="sso-icon-svg" viewBox="0 0 24 24" width="18" height="18"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+                                        <span>${p.name}</span>
+                                    </button>
+                                `;
+                            } else if (p.id === "github") {
+                                return `
+                                    <button type="button" class="btn-sso btn-sso-github" onclick="initiateSsoLogin('github')">
+                                        <svg class="sso-icon-svg" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                                        <span>${p.name}</span>
+                                    </button>
+                                `;
+                            } else {
+                                return `
+                                    <button type="button" class="btn-sso btn-sso-oidc" onclick="initiateSsoLogin('oidc')">
+                                        <i data-lucide="shield" class="btn-icon-xs" style="color:#a855f7;"></i>
+                                        <span>${p.name}</span>
+                                    </button>
+                                `;
+                            }
+                        }).join("");
+                        if (window.lucide) window.lucide.createIcons();
+                    }
+                }
+            }
+        } catch {}
+    }
+
     // Kiểm tra trạng thái đăng nhập khi load trang
     async function checkAuthSession() {
+        loadAuthProviders();
+
         if (!currentAuthToken) {
             showLoginModal();
             return;
@@ -142,9 +233,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function updateUserInterfaceProfile() {
         if (!currentAuthUser) return;
-        const iconName = currentAuthUser.avatar || (currentAuthUser.role === 'admin' ? 'shield-check' : (currentAuthUser.role === 'viewer' ? 'eye' : 'code-2'));
+        const userProviderBadge = document.getElementById("userProviderBadge");
+        if (userProviderBadge) {
+            if (currentAuthUser.provider && currentAuthUser.provider !== "local") {
+                userProviderBadge.textContent = currentAuthUser.providerName || currentAuthUser.provider.toUpperCase();
+                userProviderBadge.classList.remove("hidden");
+            } else {
+                userProviderBadge.classList.add("hidden");
+            }
+        }
+
         if (userAvatar) {
-            userAvatar.innerHTML = `<i data-lucide="${iconName}" class="user-svg-icon"></i>`;
+            if (currentAuthUser.avatar && (currentAuthUser.avatar.startsWith("http://") || currentAuthUser.avatar.startsWith("https://"))) {
+                userAvatar.innerHTML = `<img src="${currentAuthUser.avatar}" alt="Avatar" style="width:24px;height:24px;border-radius:50%;object-fit:cover;">`;
+            } else {
+                const iconName = currentAuthUser.avatar || (currentAuthUser.role === 'admin' ? 'shield-check' : (currentAuthUser.role === 'viewer' ? 'eye' : 'code-2'));
+                userAvatar.innerHTML = `<i data-lucide="${iconName}" class="user-svg-icon"></i>`;
+            }
         }
         if (userDisplayName) userDisplayName.textContent = currentAuthUser.displayName || currentAuthUser.username;
         if (userRoleBadge) {
@@ -664,23 +769,29 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
         `;
 
+        const storageThresh = (currentAlertData && currentAlertData.thresholds) ? currentAlertData.thresholds.storagePercent : 85;
+        const cpuThresh = (currentAlertData && currentAlertData.thresholds) ? currentAlertData.thresholds.cpuPercent : 85;
+        const ramThresh = (currentAlertData && currentAlertData.thresholds) ? currentAlertData.thresholds.ramPercent : 85;
+
         const nodesCardsHtml = filteredNodes.map(node => {
             // Lấy IP chính của node từ network
             const primaryNet = node.networks.find(n => n.address) || node.networks[0] || {};
             const nodeIp = primaryNet.address || "192.168.1.x";
 
             // Tính % CPU & RAM
-            const cpuPercent = (node.cpu ? (node.cpu * 100).toFixed(1) : 0);
+            const cpuPercent = Number(node.cpu ? (node.cpu * 100).toFixed(1) : 0);
             const memUsed = formatBytes(node.mem);
             const memMax = formatBytes(node.maxmem);
-            const memPercent = node.maxmem ? ((node.mem / node.maxmem) * 100).toFixed(1) : 0;
+            const memPercent = Number(node.maxmem ? ((node.mem / node.maxmem) * 100).toFixed(1) : 0);
+            const isNodeOverloaded = (cpuPercent >= cpuThresh) || (memPercent >= ramThresh);
 
             // Storages list HTML
             const storagesHtml = node.storages.map(st => {
                 const used = formatBytes(st.used);
                 const total = formatBytes(st.total);
                 const free = formatBytes(st.avail);
-                const percent = st.total ? ((st.used / st.total) * 100).toFixed(1) : 0;
+                const percent = Number(st.total ? ((st.used / st.total) * 100).toFixed(1) : 0);
+                const isStorageDanger = percent >= storageThresh;
 
                 // Các file contents (ISO, Disk, VM)
                 const contentsHtml = st.contents && st.contents.length > 0 ? `
@@ -695,17 +806,18 @@ document.addEventListener("DOMContentLoaded", () => {
                 ` : `<div class="text-muted" style="font-size:11px; margin-top:6px;">(Không có file hoặc không hỗ trợ đọc content)</div>`;
 
                 return `
-                    <div class="storage-item">
+                    <div class="storage-item ${isStorageDanger ? 'storage-danger' : ''}">
                         <div class="storage-item-header">
                             <div class="storage-name">
                                 <i data-lucide="database" class="field-icon"></i>
                                 <span>${st.storage}</span>
                                 <span class="storage-type-tag">${st.type}</span>
+                                ${isStorageDanger ? `<span class="badge-storage-danger">🚨 Vượt ngưỡng (${percent}% ≥ ${storageThresh}%)</span>` : ''}
                             </div>
-                            <div class="storage-usage-text">${used} / ${total} (${percent}%)</div>
+                            <div class="storage-usage-text ${isStorageDanger ? 'text-danger' : ''}">${used} / ${total} (${percent}%)</div>
                         </div>
                         <div class="progress-bar-bg">
-                            <div class="progress-bar-fill" style="width: ${percent}%;"></div>
+                            <div class="progress-bar-fill ${isStorageDanger ? 'progress-bar-danger' : ''}" style="width: ${percent}%;"></div>
                         </div>
                         <div style="font-size:11.5px; color:var(--text-muted); display:flex; justify-content:space-between;">
                             <span>Khả dụng: <strong>${free}</strong></span>
@@ -800,8 +912,24 @@ document.addEventListener("DOMContentLoaded", () => {
                                         </button>
                                     `;
 
+                                    const fwBtn = isDevForbidden ? '' : `
+                                        <button class="btn-action-sm" style="border-color:rgba(56,189,248,0.3); color:#38bdf8;" onclick="openVmFirewall('${node.node}', ${vm.vmid}, '${vm.name}')" title="Quản lý Firewall & Mở/Đóng Port">
+                                            <i data-lucide="shield" class="btn-icon-sm"></i>
+                                            <span>Firewall</span>
+                                        </button>
+                                    `;
+
+                                    const hotplugBtn = isDevForbidden ? '' : `
+                                        <button class="btn-action-sm btn-action-hotplug" onclick="openVmHotplug('${node.node}', ${vm.vmid}, '${vm.name}')" title="Cấu hình nóng vCPU, RAM & Quản lý đĩa">
+                                            <i data-lucide="cpu" class="btn-icon-sm"></i>
+                                            <span>Cấu hình</span>
+                                        </button>
+                                    `;
+
                                     return `
                                         ${powerBtns}
+                                        ${hotplugBtn}
+                                        ${fwBtn}
                                         ${snapBtn}
                                         <button class="btn-action-sm" onclick="showVmDetail('${node.node}', ${vm.vmid})" title="Xem cấu hình Proxmox">
                                             <i data-lucide="eye" class="btn-icon-sm"></i>
@@ -1340,6 +1468,267 @@ document.addEventListener("DOMContentLoaded", () => {
                 await loadVmSnapshots();
             } else {
                 showRbacAlert(`⛔ Lỗi xóa snapshot: ${data.error || "Không rõ nguyên nhân"}`);
+            }
+        } catch (err) {
+            showRbacAlert(`⛔ Lỗi kết nối: ${err.message}`);
+        }
+    };
+
+    // ==========================================
+    // VISUAL FIREWALL & SECURITY GROUPS
+    // ==========================================
+    let currentFirewallVm = null;
+    const firewallModal = document.getElementById("firewallModal");
+    const btnCloseFirewallModal = document.getElementById("btnCloseFirewallModal");
+    const firewallRulesTableBody = document.getElementById("firewallRulesTableBody");
+    const formCreateFirewallRule = document.getElementById("formCreateFirewallRule");
+    const toggleVmFirewall = document.getElementById("toggleVmFirewall");
+    const firewallEnableStatusText = document.getElementById("firewallEnableStatusText");
+
+    if (btnCloseFirewallModal && firewallModal) {
+        btnCloseFirewallModal.addEventListener("click", () => {
+            firewallModal.classList.add("hidden");
+            currentFirewallVm = null;
+        });
+    }
+
+    window.openVmFirewall = async (node, vmid, vmname) => {
+        currentFirewallVm = { node, vmid, vmname };
+        document.getElementById("firewallModalTitle").textContent = `Firewall & Security Groups: ${vmname || `VM #${vmid}`}`;
+        document.getElementById("firewallModalSubtitle").textContent = `Node: ${node} | VMID: ${vmid} — Quản lý Inbound/Outbound Port Rules`;
+        firewallModal.classList.remove("hidden");
+        if (window.lucide) window.lucide.createIcons();
+        await loadVmFirewall();
+    };
+
+    async function loadVmFirewall() {
+        if (!currentFirewallVm || !firewallRulesTableBody) return;
+
+        firewallRulesTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding: 24px;"><span class="spinner" style="display:inline-block; vertical-align:middle; margin-right:8px;"></span> Đang tải quy tắc Firewall...</td></tr>`;
+
+        try {
+            const res = await fetch(`/api/nodes/${currentFirewallVm.node}/vms/${currentFirewallVm.vmid}/firewall`, {
+                headers: getAuthHeaders(),
+            });
+            const result = await res.json();
+
+            if (result.success && result.data) {
+                const { rules, options } = result.data;
+                const isEnabled = options && (options.enable === 1 || options.enable === true || options.enable === "1");
+
+                if (toggleVmFirewall) {
+                    toggleVmFirewall.checked = isEnabled;
+                }
+                if (firewallEnableStatusText) {
+                    firewallEnableStatusText.textContent = isEnabled ? "Firewall: ON (Đang bảo vệ)" : "Firewall: OFF (Tắt)";
+                    firewallEnableStatusText.style.color = isEnabled ? "#38bdf8" : "#94a3b8";
+                }
+
+                if (!rules || rules.length === 0) {
+                    firewallRulesTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding: 28px;">Chưa có quy tắc Firewall nào. Sử dụng <strong>1-Click Presets</strong> ở trên hoặc form bên dưới để thêm rule.</td></tr>`;
+                    return;
+                }
+
+                const role = currentAuthUser ? currentAuthUser.role : "viewer";
+                const isViewer = role === "viewer";
+
+                firewallRulesTableBody.innerHTML = rules.map((r, index) => {
+                    const rulePos = r.pos !== undefined ? r.pos : index;
+                    const isRuleActive = (r.enable === 1 || r.enable === true || r.enable === "1" || r.enable === undefined);
+                    const action = (r.action || "ACCEPT").toUpperCase();
+                    const actionBadge = action === "ACCEPT" 
+                        ? `<span class="tag-deployed" style="font-size:11px;"><i data-lucide="check" class="badge-svg"></i> ACCEPT</span>` 
+                        : (action === "DROP" 
+                            ? `<span class="tag-env tag-env-pro" style="font-size:11px;"><i data-lucide="shield-alert" class="badge-svg"></i> DROP</span>` 
+                            : `<span class="tag-env tag-env-stag" style="font-size:11px;"><i data-lucide="alert-triangle" class="badge-svg"></i> REJECT</span>`);
+
+                    const direction = (r.type || "in").toUpperCase();
+                    const proto = (r.proto || "ANY").toUpperCase();
+                    const dport = r.dport || "ALL";
+                    const source = r.source || "0.0.0.0/0";
+                    const comment = r.comment || '<span class="text-muted">—</span>';
+
+                    return `
+                        <tr style="${!isRuleActive ? 'opacity: 0.55;' : ''}">
+                            <td>
+                                <input type="checkbox" ${isRuleActive ? 'checked' : ''} ${isViewer ? 'disabled' : ''} onchange="toggleVmFirewallRule(${rulePos}, this.checked)" title="Bật/Tắt Rule">
+                            </td>
+                            <td>${actionBadge}</td>
+                            <td><strong style="color:${direction === 'IN' ? '#38bdf8' : '#a855f7'}; font-size:12px;">${direction}</strong></td>
+                            <td><code style="color:#e2e8f0; font-size:11.5px;">${proto}</code></td>
+                            <td><strong style="color:#f8fafc; font-family:'JetBrains Mono',monospace; font-size:12px;">${dport}</strong></td>
+                            <td style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#94a3b8;">${source}</td>
+                            <td style="font-size:11.5px; color:#cbd5e1;">${comment}</td>
+                            <td class="text-right">
+                                ${isViewer ? '<span class="text-muted" style="font-size:11px;">Chỉ xem</span>' : `
+                                    <button class="btn-action-fw" onclick="deleteVmFirewallRule(${rulePos})" title="Xóa Rule">
+                                        <i data-lucide="trash-2" style="width:12px;height:12px;"></i>
+                                        <span>Xóa</span>
+                                    </button>
+                                `}
+                            </td>
+                        </tr>
+                    `;
+                }).join("");
+
+                if (window.lucide) window.lucide.createIcons();
+            } else {
+                firewallRulesTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding: 24px;">Không thể tải danh sách Firewall: ${result.error || 'Lỗi không xác định'}</td></tr>`;
+            }
+        } catch (err) {
+            firewallRulesTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-error" style="padding: 24px;">Lỗi kết nối: ${err.message}</td></tr>`;
+        }
+    }
+
+    // Toggle Firewall Master Switch
+    if (toggleVmFirewall) {
+        toggleVmFirewall.addEventListener("change", async (e) => {
+            if (!currentFirewallVm) return;
+            const enable = e.target.checked ? 1 : 0;
+            showToast(`⚙️ Đang ${enable ? 'Bật' : 'Tắt'} Firewall VM #${currentFirewallVm.vmid}...`);
+
+            try {
+                const res = await fetch(`/api/nodes/${currentFirewallVm.node}/vms/${currentFirewallVm.vmid}/firewall/options`, {
+                    method: "PUT",
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ enable })
+                });
+                const result = await res.json();
+                if (result.success) {
+                    showToast(`✅ Đã ${enable ? 'Bật' : 'Tắt'} Firewall thành công!`);
+                    await loadVmFirewall();
+                } else {
+                    showRbacAlert(`⛔ ${result.error}`);
+                    e.target.checked = !enable;
+                }
+            } catch (err) {
+                showRbacAlert(`⛔ Lỗi kết nối: ${err.message}`);
+                e.target.checked = !enable;
+            }
+        });
+    }
+
+    // 1-Click Security Presets Quick Handler
+    window.applyFirewallPreset = async (presetType) => {
+        if (!currentFirewallVm) return;
+
+        let ruleData = null;
+        if (presetType === "ssh") {
+            ruleData = { action: "ACCEPT", type: "in", proto: "tcp", dport: "22", comment: "Allow SSH Remote Access" };
+        } else if (presetType === "web") {
+            ruleData = { action: "ACCEPT", type: "in", proto: "tcp", dport: "80,443", comment: "Allow Web HTTP/HTTPS" };
+        } else if (presetType === "database") {
+            ruleData = { action: "ACCEPT", type: "in", proto: "tcp", dport: "5432,3306", comment: "Allow DB (Postgres/MySQL)" };
+        } else if (presetType === "redis") {
+            ruleData = { action: "ACCEPT", type: "in", proto: "tcp", dport: "6379", comment: "Allow Redis Inbound" };
+        } else if (presetType === "k8s") {
+            ruleData = { action: "ACCEPT", type: "in", proto: "tcp", dport: "6443", comment: "Allow K8s API Server" };
+        } else if (presetType === "ping") {
+            ruleData = { action: "ACCEPT", type: "in", proto: "icmp", dport: "", comment: "Allow ICMP Echo/Ping" };
+        }
+
+        if (!ruleData) return;
+
+        showToast(`🛡️ Đang áp dụng preset mở port ${ruleData.dport || ruleData.proto}...`);
+
+        try {
+            const res = await fetch(`/api/nodes/${currentFirewallVm.node}/vms/${currentFirewallVm.vmid}/firewall/rules`, {
+                method: "POST",
+                headers: getAuthHeaders(),
+                body: JSON.stringify(ruleData)
+            });
+            const result = await res.json();
+            if (result.success) {
+                showToast(`✅ Đã thêm quy tắc ${ruleData.comment} thành công!`);
+                await loadVmFirewall();
+            } else {
+                showRbacAlert(`⛔ Lỗi thêm preset: ${result.error}`);
+            }
+        } catch (err) {
+            showRbacAlert(`⛔ Lỗi kết nối: ${err.message}`);
+        }
+    };
+
+    // Form Submit: Thêm Rule Firewall Thủ Công
+    if (formCreateFirewallRule) {
+        formCreateFirewallRule.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            if (!currentFirewallVm) return;
+
+            const action = document.getElementById("fwAction").value;
+            const type = document.getElementById("fwType").value;
+            const proto = document.getElementById("fwProto").value;
+            const dport = document.getElementById("fwDport").value;
+            const source = document.getElementById("fwSource").value;
+            const comment = document.getElementById("fwComment").value;
+
+            const btnSubmit = document.getElementById("btnSubmitFwRule");
+            if (btnSubmit) btnSubmit.disabled = true;
+            showToast(`🛡️ Đang thêm quy tắc Firewall mới...`);
+
+            try {
+                const res = await fetch(`/api/nodes/${currentFirewallVm.node}/vms/${currentFirewallVm.vmid}/firewall/rules`, {
+                    method: "POST",
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ action, type, proto, dport, source, comment })
+                });
+                const result = await res.json();
+                if (result.success) {
+                    showToast(`✅ Đã thêm quy tắc Firewall thành công!`);
+                    formCreateFirewallRule.reset();
+                    await loadVmFirewall();
+                } else {
+                    showRbacAlert(`⛔ Lỗi: ${result.error}`);
+                }
+            } catch (err) {
+                showRbacAlert(`⛔ Lỗi kết nối: ${err.message}`);
+            } finally {
+                if (btnSubmit) btnSubmit.disabled = false;
+            }
+        });
+    }
+
+    // Toggle Bật/Tắt từng Rule
+    window.toggleVmFirewallRule = async (pos, enable) => {
+        if (!currentFirewallVm) return;
+        showToast(`⚙️ Đang ${enable ? 'bật' : 'tắt'} Rule #${pos}...`);
+        try {
+            const res = await fetch(`/api/nodes/${currentFirewallVm.node}/vms/${currentFirewallVm.vmid}/firewall/rules/${pos}`, {
+                method: "PUT",
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ enable: enable ? 1 : 0 })
+            });
+            const result = await res.json();
+            if (result.success) {
+                showToast(`✅ Đã cập nhật trạng thái Rule #${pos}!`);
+                await loadVmFirewall();
+            } else {
+                showRbacAlert(`⛔ Lỗi: ${result.error}`);
+                await loadVmFirewall();
+            }
+        } catch (err) {
+            showRbacAlert(`⛔ Lỗi kết nối: ${err.message}`);
+            await loadVmFirewall();
+        }
+    };
+
+    // Xóa Rule Firewall
+    window.deleteVmFirewallRule = async (pos) => {
+        if (!confirm(`🗑️ Bạn có chắc muốn XÓA quy tắc Firewall #${pos} này không?`)) return;
+        if (!currentFirewallVm) return;
+
+        showToast(`🗑️ Đang xóa Rule #${pos}...`);
+        try {
+            const res = await fetch(`/api/nodes/${currentFirewallVm.node}/vms/${currentFirewallVm.vmid}/firewall/rules/${pos}`, {
+                method: "DELETE",
+                headers: getAuthHeaders()
+            });
+            const result = await res.json();
+            if (result.success) {
+                showToast(`✅ Đã xóa quy tắc Firewall thành công!`);
+                await loadVmFirewall();
+            } else {
+                showRbacAlert(`⛔ Lỗi xóa: ${result.error}`);
             }
         } catch (err) {
             showRbacAlert(`⛔ Lỗi kết nối: ${err.message}`);
@@ -2004,16 +2393,35 @@ document.addEventListener("DOMContentLoaded", () => {
                     const canDelete = role === "admin" || (role === "developer" && !isProdOrStag);
 
                     let actionCellHtml = "";
+                    const fwQuickBtn = (vm.vmId && vm.nodeName && role !== "viewer") ? `
+                        <button class="btn-action-sm btn-action-hotplug" style="margin-right:4px;" onclick="openVmHotplug('${vm.nodeName}', ${vm.vmId}, '${vm.vmName}')" title="Cấu hình nóng vCPU, RAM & Quản lý đĩa">
+                            <i data-lucide="cpu" class="btn-icon-sm"></i>
+                            <span>Cấu hình</span>
+                        </button>
+                        <button class="btn-action-sm" style="border-color:rgba(56,189,248,0.3); color:#38bdf8; margin-right:4px;" onclick="openVmFirewall('${vm.nodeName}', ${vm.vmId}, '${vm.vmName}')" title="Mở/Đóng Port Firewall">
+                            <i data-lucide="shield" class="btn-icon-sm"></i>
+                            <span>Port</span>
+                        </button>
+                    ` : '';
+
                     if (role === "viewer") {
                         actionCellHtml = `<span class="badge-optional" style="font-size:11px; opacity:0.6;"><i data-lucide="lock" style="width:11px;height:11px;"></i> Chỉ xem</span>`;
                     } else if (role === "developer" && isProdOrStag) {
-                        actionCellHtml = `<span class="badge-optional" title="Môi trường ${vm.environment.toUpperCase()} - Chỉ Admin mới có quyền xóa" style="font-size:11px; color:#ef4444; border-color:rgba(239,68,68,0.3);"><i data-lucide="shield-alert" style="width:11px;height:11px;"></i> Protected</span>`;
+                        actionCellHtml = `
+                            <div style="display:flex; justify-content:flex-end; align-items:center;">
+                                ${fwQuickBtn}
+                                <span class="badge-optional" title="Môi trường ${vm.environment.toUpperCase()} - Chỉ Admin mới có quyền xóa" style="font-size:11px; color:#ef4444; border-color:rgba(239,68,68,0.3);"><i data-lucide="shield-alert" style="width:11px;height:11px;"></i> Protected</span>
+                            </div>
+                        `;
                     } else {
                         actionCellHtml = `
-                            <button class="btn-danger-sm" onclick="destroyVm('${vm.stackName}', ${vm.protection})">
-                                <i data-lucide="trash" class="btn-icon-sm"></i>
-                                Xóa
-                            </button>
+                            <div style="display:flex; justify-content:flex-end; align-items:center;">
+                                ${fwQuickBtn}
+                                <button class="btn-danger-sm" onclick="destroyVm('${vm.stackName}', ${vm.protection})">
+                                    <i data-lucide="trash" class="btn-icon-sm"></i>
+                                    Xóa
+                                </button>
+                            </div>
                         `;
                     }
 
@@ -2571,6 +2979,17 @@ runcmd:
                     vmName = `${rawBaseName}${numStr}`;
                 }
 
+                // Thu thập danh sách ổ đĩa phụ mở rộng (Secondary Disks)
+                const secondaryDisks = [];
+                document.querySelectorAll(".secondary-disk-row").forEach(row => {
+                    const name = row.querySelector(".sec-disk-name")?.value || "Data Disk";
+                    const sizeGb = Number(row.querySelector(".sec-disk-size")?.value) || 20;
+                    const store = row.querySelector(".sec-disk-store")?.value || "";
+                    if (store && sizeGb > 0) {
+                        secondaryDisks.push({ name, sizeGb, datastoreId: store });
+                    }
+                });
+
                 const assignedNode = selectedNodes[(i - 1) % selectedNodes.length];
                 vmsList.push({
                     name: vmName,
@@ -2586,6 +3005,7 @@ runcmd:
                     cores,
                     memoryMb,
                     diskSizeGb,
+                    secondaryDisks: secondaryDisks.length > 0 ? secondaryDisks : undefined,
                     sshPublicKey,
                     userData,
                     upgrade,
@@ -2926,6 +3346,672 @@ runcmd:
         }
     };
 
-    // Tự động load dữ liệu Proxmox ngay khi mở trang
+    // ==========================================
+    // CLUSTER RESOURCE ALERTING CONTROLLER
+    // ==========================================
+    const clusterAlertBanner = document.getElementById("clusterAlertBanner");
+    const alertBannerTitle = document.getElementById("alertBannerTitle");
+    const alertBannerDetails = document.getElementById("alertBannerDetails");
+    const btnBannerViewAlerts = document.getElementById("btnBannerViewAlerts");
+    const btnDismissAlertBanner = document.getElementById("btnDismissAlertBanner");
+
+    const btnOpenAlertsModal = document.getElementById("btnOpenAlertsModal");
+    const alertManagerModal = document.getElementById("alertManagerModal");
+    const btnCloseAlertModal = document.getElementById("btnCloseAlertModal");
+    const headerAlertBadgeCount = document.getElementById("headerAlertBadgeCount");
+    const modalActiveAlertBadge = document.getElementById("modalActiveAlertBadge");
+    const activeAlertSummaryText = document.getElementById("activeAlertSummaryText");
+    const activeAlertsContainer = document.getElementById("activeAlertsContainer");
+    const alertHistoryTableBody = document.getElementById("alertHistoryTableBody");
+
+    const formAlertConfig = document.getElementById("formAlertConfig");
+    const cfgStorageThreshold = document.getElementById("cfgStorageThreshold");
+    const cfgCpuThreshold = document.getElementById("cfgCpuThreshold");
+    const cfgRamThreshold = document.getElementById("cfgRamThreshold");
+    const cfgCheckInterval = document.getElementById("cfgCheckInterval");
+    const cfgTelegramEnabled = document.getElementById("cfgTelegramEnabled");
+    const cfgTelegramBotToken = document.getElementById("cfgTelegramBotToken");
+    const cfgTelegramChatId = document.getElementById("cfgTelegramChatId");
+    const cfgWebhookEnabled = document.getElementById("cfgWebhookEnabled");
+    const cfgWebhookUrl = document.getElementById("cfgWebhookUrl");
+    const alertConfigMsg = document.getElementById("alertConfigMsg");
+    const btnTestAlertNotification = document.getElementById("btnTestAlertNotification");
+    const btnManualCheckAlerts = document.getElementById("btnManualCheckAlerts");
+
+    async function loadClusterAlerts() {
+        try {
+            const res = await fetch("/api/alerts", { credentials: "omit" });
+            if (!res.ok) return;
+            const resJson = await res.json();
+            if (!resJson.success || !resJson.data) return;
+
+            currentAlertData = resJson.data;
+            const { thresholds, activeAlerts, recentHistory, activeCount } = resJson.data;
+
+            // 1. Cập nhật Badge chuông thông báo
+            if (headerAlertBadgeCount) {
+                if (activeCount > 0) {
+                    headerAlertBadgeCount.textContent = activeCount;
+                    headerAlertBadgeCount.classList.remove("hidden");
+                } else {
+                    headerAlertBadgeCount.classList.add("hidden");
+                }
+            }
+
+            if (modalActiveAlertBadge) {
+                if (activeCount > 0) {
+                    modalActiveAlertBadge.textContent = activeCount;
+                    modalActiveAlertBadge.classList.remove("hidden");
+                } else {
+                    modalActiveAlertBadge.classList.add("hidden");
+                }
+            }
+
+            // 2. Cập nhật Sticky Alert Banner
+            if (clusterAlertBanner) {
+                if (activeCount > 0) {
+                    clusterAlertBanner.classList.remove("hidden");
+                    const hasCritical = activeAlerts.some(a => a.severity === "CRITICAL");
+                    if (hasCritical) {
+                        clusterAlertBanner.classList.add("alert-critical");
+                    } else {
+                        clusterAlertBanner.classList.remove("alert-critical");
+                    }
+
+                    if (alertBannerTitle) {
+                        alertBannerTitle.textContent = `🚨 Phát hiện ${activeCount} cảnh báo ngưỡng tài nguyên cụm!`;
+                    }
+                    if (alertBannerDetails) {
+                        const summaries = activeAlerts.map(a => `${a.resourceName} (${a.currentValue}${a.unit} ≥ ${a.thresholdValue}${a.unit})`).join(" • ");
+                        alertBannerDetails.textContent = summaries;
+                    }
+                } else {
+                    clusterAlertBanner.classList.add("hidden");
+                }
+            }
+
+            // 3. Render danh sách Active Alerts trong Modal
+            if (activeAlertSummaryText) {
+                activeAlertSummaryText.textContent = activeCount > 0
+                    ? `Hiện có ${activeCount} tài nguyên đang vượt ngưỡng giám sát an toàn:`
+                    : `✅ Toàn bộ tài nguyên trong cụm đang ở mức an toàn (Storage < ${thresholds.storagePercent}%, CPU < ${thresholds.cpuPercent}%, RAM < ${thresholds.ramPercent}%).`;
+            }
+
+            if (activeAlertsContainer) {
+                if (activeCount === 0) {
+                    activeAlertsContainer.innerHTML = `
+                        <div class="card text-center text-muted" style="padding: 28px 16px;">
+                            <i data-lucide="shield-check" style="width: 36px; height: 36px; color: #22c55e; margin: 0 auto 10px; display: block;"></i>
+                            <h4 style="color: #f8fafc; font-size: 14px; margin-bottom: 4px;">Hạ Tầng Hoạt Động Bình Thường</h4>
+                            <p style="font-size: 12px; margin: 0;">Không có Storage Pool nào vượt quá ${thresholds.storagePercent}% hoặc Node bị quá tải.</p>
+                        </div>
+                    `;
+                } else {
+                    activeAlertsContainer.innerHTML = activeAlerts.map(alert => {
+                        const isCritical = alert.severity === "CRITICAL";
+                        const timeStr = new Date(alert.timestamp).toLocaleTimeString();
+                        return `
+                            <div class="alert-card-item ${isCritical ? 'alert-critical' : 'alert-warning'}">
+                                <div class="alert-card-info">
+                                    <div class="alert-card-title">
+                                        <span>${isCritical ? '🚨' : '⚠️'}</span>
+                                        <span>${alert.title}</span>
+                                        <span class="badge-storage-danger">${alert.severity}</span>
+                                    </div>
+                                    <div class="alert-card-desc">${alert.message}</div>
+                                    <div class="alert-card-meta">
+                                        <span><i data-lucide="server" style="width:12px;height:12px;display:inline;"></i> Node: <strong>${alert.node}</strong></span>
+                                        <span><i data-lucide="clock" style="width:12px;height:12px;display:inline;"></i> Phát hiện: ${timeStr}</span>
+                                    </div>
+                                </div>
+                                <div class="alert-card-actions">
+                                    <button class="btn-dismiss-alert" onclick="dismissClusterAlert('${alert.id}')" title="Ẩn cảnh báo này">
+                                        <i data-lucide="check" class="btn-icon-xs"></i> Đã xem
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }).join("");
+                }
+            }
+
+            // 4. Render Alert History
+            if (alertHistoryTableBody) {
+                if (!recentHistory || recentHistory.length === 0) {
+                    alertHistoryTableBody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding: 20px;">Chưa có lịch sử cảnh báo nào được ghi nhận</td></tr>`;
+                } else {
+                    alertHistoryTableBody.innerHTML = recentHistory.map(hist => {
+                        const timeStr = new Date(hist.timestamp).toLocaleString();
+                        const isResolved = hist.status === "RESOLVED";
+                        const isDismissed = hist.status === "DISMISSED";
+                        let statusBadge = `<span class="badge-storage-danger">ACTIVE</span>`;
+                        if (isResolved) {
+                            statusBadge = `<span class="tag-deployed"><i data-lucide="check-circle" class="badge-svg"></i> RESOLVED</span>`;
+                        } else if (isDismissed) {
+                            statusBadge = `<span class="badge-optional">DISMISSED</span>`;
+                        }
+
+                        return `
+                            <tr>
+                                <td style="font-size:11.5px; color:#94a3b8;">${timeStr}</td>
+                                <td><strong>${hist.resourceName}</strong></td>
+                                <td><code>${hist.node}</code></td>
+                                <td><strong style="color:${hist.currentValue >= hist.thresholdValue ? '#ef4444' : '#22c55e'}">${hist.currentValue}${hist.unit}</strong> (Ngưỡng: ${hist.thresholdValue}${hist.unit})</td>
+                                <td><span class="tag-env tag-env-${hist.severity === 'CRITICAL' ? 'pro' : 'stag'}">${hist.severity}</span></td>
+                                <td>${statusBadge}</td>
+                            </tr>
+                        `;
+                    }).join("");
+                }
+            }
+
+            // 5. Fill Config Inputs
+            if (thresholds) {
+                if (cfgStorageThreshold) cfgStorageThreshold.value = thresholds.storagePercent || 85;
+                if (cfgCpuThreshold) cfgCpuThreshold.value = thresholds.cpuPercent || 85;
+                if (cfgRamThreshold) cfgRamThreshold.value = thresholds.ramPercent || 85;
+                if (cfgCheckInterval) cfgCheckInterval.value = thresholds.checkIntervalSec || 30;
+                if (cfgTelegramEnabled) cfgTelegramEnabled.checked = !!thresholds.telegramEnabled;
+                if (cfgTelegramBotToken && thresholds.telegramBotToken) cfgTelegramBotToken.value = thresholds.telegramBotToken;
+                if (cfgTelegramChatId && thresholds.telegramChatId) cfgTelegramChatId.value = thresholds.telegramChatId;
+                if (cfgWebhookEnabled) cfgWebhookEnabled.checked = !!thresholds.webhookEnabled;
+                if (cfgWebhookUrl && thresholds.webhookUrl) cfgWebhookUrl.value = thresholds.webhookUrl;
+            }
+
+            if (window.lucide) window.lucide.createIcons();
+        } catch (err) {
+            console.error("[Cluster Alert] Lỗi tải cảnh báo:", err);
+        }
+    }
+
+    // Dismiss Alert by ID
+    window.dismissClusterAlert = async (alertId) => {
+        try {
+            await fetch("/api/alerts/dismiss", {
+                method: "POST",
+                headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+                body: JSON.stringify({ id: alertId })
+            });
+            showToast("✅ Đã tắt cảnh báo.");
+            await loadClusterAlerts();
+        } catch (e) {
+            showToast("⛔ Không thể tắt cảnh báo.");
+        }
+    };
+
+    // Open Alert Modal
+    if (btnOpenAlertsModal && alertManagerModal) {
+        btnOpenAlertsModal.addEventListener("click", () => {
+            alertManagerModal.classList.remove("hidden");
+            loadClusterAlerts();
+        });
+    }
+
+    if (btnBannerViewAlerts && alertManagerModal) {
+        btnBannerViewAlerts.addEventListener("click", () => {
+            alertManagerModal.classList.remove("hidden");
+            loadClusterAlerts();
+        });
+    }
+
+    if (btnCloseAlertModal && alertManagerModal) {
+        btnCloseAlertModal.addEventListener("click", () => {
+            alertManagerModal.classList.add("hidden");
+        });
+    }
+
+    if (btnDismissAlertBanner && clusterAlertBanner) {
+        btnDismissAlertBanner.addEventListener("click", () => {
+            clusterAlertBanner.classList.add("hidden");
+        });
+    }
+
+    // Modal Sub-tabs Switching
+    document.querySelectorAll(".modal-sub-tab").forEach(tabBtn => {
+        tabBtn.addEventListener("click", () => {
+            const targetPaneId = tabBtn.getAttribute("data-alert-tab");
+            document.querySelectorAll(".modal-sub-tab").forEach(b => b.classList.remove("active"));
+            document.querySelectorAll(".alert-tab-pane").forEach(p => p.classList.remove("active"));
+
+            tabBtn.classList.add("active");
+            const targetPane = document.getElementById(targetPaneId);
+            if (targetPane) targetPane.classList.add("active");
+            if (window.lucide) window.lucide.createIcons();
+        });
+    });
+
+    // Manual Quick Check Alerts
+    if (btnManualCheckAlerts) {
+        btnManualCheckAlerts.addEventListener("click", async () => {
+            showToast("🔍 Đang quét tức thời tài nguyên cụm...");
+            try {
+                const res = await fetch("/api/alerts/check", {
+                    method: "POST",
+                    headers: getAuthHeaders()
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`✅ Quét hoàn tất! ${data.data.activeCount} cảnh báo hoạt động.`);
+                    await loadClusterAlerts();
+                    if (cachedClusterData.length > 0) renderClusterView(cachedClusterData, currentSearchTerm);
+                }
+            } catch (err) {
+                showToast(`⛔ Lỗi: ${err.message}`);
+            }
+        });
+    }
+
+    // Send Test Alert Notification
+    if (btnTestAlertNotification) {
+        btnTestAlertNotification.addEventListener("click", async () => {
+            btnTestAlertNotification.disabled = true;
+            showToast("🚀 Đang gửi thông báo thử nghiệm tới Telegram & Webhook...");
+            try {
+                const res = await fetch("/api/alerts/test", {
+                    method: "POST",
+                    headers: getAuthHeaders()
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`🔔 Kết quả: ${data.data.details}`);
+                    await loadClusterAlerts();
+                } else {
+                    showRbacAlert(`⛔ Lỗi Test Alert: ${data.error}`);
+                }
+            } catch (err) {
+                showRbacAlert(`⛔ Lỗi: ${err.message}`);
+            } finally {
+                btnTestAlertNotification.disabled = false;
+            }
+        });
+    }
+
+    // Save Alert Configuration Form
+    if (formAlertConfig) {
+        formAlertConfig.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const storagePercent = Number(cfgStorageThreshold.value) || 85;
+            const cpuPercent = Number(cfgCpuThreshold.value) || 85;
+            const ramPercent = Number(cfgRamThreshold.value) || 85;
+            const checkIntervalSec = Number(cfgCheckInterval.value) || 30;
+            const telegramEnabled = !!cfgTelegramEnabled.checked;
+            const telegramBotToken = cfgTelegramBotToken.value.trim();
+            const telegramChatId = cfgTelegramChatId.value.trim();
+            const webhookEnabled = !!cfgWebhookEnabled.checked;
+            const webhookUrl = cfgWebhookUrl.value.trim();
+
+            const btnSave = document.getElementById("btnSaveAlertConfig");
+            if (btnSave) btnSave.disabled = true;
+            showToast("⚙️ Đang lưu cấu hình cảnh báo ngưỡng...");
+
+            try {
+                const res = await fetch("/api/alerts/config", {
+                    method: "POST",
+                    headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        storagePercent,
+                        cpuPercent,
+                        ramPercent,
+                        checkIntervalSec,
+                        telegramEnabled,
+                        telegramBotToken,
+                        telegramChatId,
+                        webhookEnabled,
+                        webhookUrl
+                    })
+                });
+                const result = await res.json();
+                if (result.success) {
+                    showToast("✅ Đã lưu cấu hình Cảnh Báo Ngưỡng thành công!");
+                    await loadClusterAlerts();
+                    if (cachedClusterData.length > 0) renderClusterView(cachedClusterData, currentSearchTerm);
+                } else {
+                    showRbacAlert(`⛔ Lỗi lưu cấu hình: ${result.error}`);
+                }
+            } catch (err) {
+                showRbacAlert(`⛔ Lỗi kết nối: ${err.message}`);
+            } finally {
+                if (btnSave) btnSave.disabled = false;
+            }
+        });
+    }
+
+    // ==========================================
+    // MULTI-DISK ATTACHMENT IN CREATION WIZARD
+    // ==========================================
+    const btnAddSecondaryDisk = document.getElementById("btnAddSecondaryDisk");
+    const secondaryDisksContainer = document.getElementById("secondaryDisksContainer");
+
+    function createSecondaryDiskRow() {
+        if (!secondaryDisksContainer) return;
+        const row = document.createElement("div");
+        row.className = "secondary-disk-row";
+
+        const currentNode = document.getElementById("nodeName")?.value || "";
+        const nodeData = (cachedClusterData || []).find(n => n.node === currentNode);
+        const storages = (nodeData && nodeData.storages) ? nodeData.storages : [];
+        const optionsHtml = storages.map(s => `<option value="${s.storage}">${s.storage} (${s.type})</option>`).join("") || '<option value="local-lvm">local-lvm</option>';
+
+        row.innerHTML = `
+            <div class="form-group">
+                <input type="text" class="form-input sec-disk-name" placeholder="Tên đĩa (vd: Data / Logs)" value="Data Disk">
+            </div>
+            <div class="form-group">
+                <input type="number" class="form-input sec-disk-size" placeholder="GB" min="5" max="2000" value="50">
+            </div>
+            <div class="form-group">
+                <select class="form-input sec-disk-store">
+                    ${optionsHtml}
+                </select>
+            </div>
+            <button type="button" class="btn-remove-disk" title="Xóa đĩa này" onclick="this.closest('.secondary-disk-row').remove()">
+                <i data-lucide="trash-2" style="width:14px;height:14px;"></i>
+            </button>
+        `;
+        secondaryDisksContainer.appendChild(row);
+        if (window.lucide) window.lucide.createIcons();
+    }
+
+    if (btnAddSecondaryDisk) {
+        btnAddSecondaryDisk.addEventListener("click", createSecondaryDiskRow);
+    }
+
+    // ==========================================
+    // HARDWARE HOTPLUG & MULTI-DISK MODAL CONTROLLER
+    // ==========================================
+    let currentHotplugVm = null;
+    const hotplugModal = document.getElementById("hotplugModal");
+    const btnCloseHotplugModal = document.getElementById("btnCloseHotplugModal");
+    const formHotplugCpuRam = document.getElementById("formHotplugCpuRam");
+    const formAttachDisk = document.getElementById("formAttachDisk");
+    const hotplugDisksTableBody = document.getElementById("hotplugDisksTableBody");
+
+    const hotplugCores = document.getElementById("hotplugCores");
+    const hotplugCoresRange = document.getElementById("hotplugCoresRange");
+    const hotplugMemoryMb = document.getElementById("hotplugMemoryMb");
+    const hotplugMemoryRange = document.getElementById("hotplugMemoryRange");
+    const hotplugMemoryGbHint = document.getElementById("hotplugMemoryGbHint");
+
+    // Sync Sliders & Inputs
+    if (hotplugCores && hotplugCoresRange) {
+        hotplugCores.addEventListener("input", () => { hotplugCoresRange.value = hotplugCores.value; });
+        hotplugCoresRange.addEventListener("input", () => { hotplugCores.value = hotplugCoresRange.value; });
+    }
+
+    if (hotplugMemoryMb && hotplugMemoryRange) {
+        const updateMemHint = (val) => {
+            if (hotplugMemoryGbHint) hotplugMemoryGbHint.textContent = `~ ${(val / 1024).toFixed(1)} GB`;
+        };
+        hotplugMemoryMb.addEventListener("input", () => {
+            hotplugMemoryRange.value = hotplugMemoryMb.value;
+            updateMemHint(hotplugMemoryMb.value);
+        });
+        hotplugMemoryRange.addEventListener("input", () => {
+            hotplugMemoryMb.value = hotplugMemoryRange.value;
+            updateMemHint(hotplugMemoryRange.value);
+        });
+    }
+
+    // Modal Sub-tabs Switching
+    document.querySelectorAll("[data-hotplug-tab]").forEach(tabBtn => {
+        tabBtn.addEventListener("click", () => {
+            const targetPaneId = tabBtn.getAttribute("data-hotplug-tab");
+            document.querySelectorAll("[data-hotplug-tab]").forEach(b => b.classList.remove("active"));
+            document.querySelectorAll(".hotplug-tab-pane").forEach(p => p.classList.remove("active"));
+
+            tabBtn.classList.add("active");
+            const targetPane = document.getElementById(targetPaneId);
+            if (targetPane) targetPane.classList.add("active");
+            if (window.lucide) window.lucide.createIcons();
+        });
+    });
+
+    if (btnCloseHotplugModal && hotplugModal) {
+        btnCloseHotplugModal.addEventListener("click", () => {
+            hotplugModal.classList.add("hidden");
+            currentHotplugVm = null;
+        });
+    }
+
+    // Open Hotplug Modal
+    window.openVmHotplug = async (node, vmid, vmname) => {
+        currentHotplugVm = { node, vmid, vmname };
+        document.getElementById("hotplugModalTitle").textContent = `Cấu Hình Nóng & Đa Ổ Đĩa: ${vmname || `VM #${vmid}`}`;
+        document.getElementById("hotplugModalSubtitle").textContent = `Node: ${node} | VMID: ${vmid} — Thay đổi vCPU, RAM và Gắn/Mở rộng đĩa tức thời`;
+        hotplugModal.classList.remove("hidden");
+
+        await loadVmHardwareDetails();
+    };
+
+    async function loadVmHardwareDetails() {
+        if (!currentHotplugVm) return;
+        const { node, vmid } = currentHotplugVm;
+
+        if (hotplugDisksTableBody) {
+            hotplugDisksTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted" style="padding: 20px;"><span class="spinner" style="margin:0 auto 6px;display:block;"></span> Đang đọc cấu hình phần cứng Proxmox...</td></tr>`;
+        }
+
+        try {
+            const res = await fetch(`/api/nodes/${node}/vms/${vmid}/hardware`, {
+                headers: getAuthHeaders()
+            });
+            const data = await res.json();
+            if (!data.success) {
+                showRbacAlert(`⛔ Lỗi tải phần cứng: ${data.error}`);
+                return;
+            }
+
+            const hw = data.data;
+
+            // 1. Điền thông số hiện tại
+            const curCpuVal = document.getElementById("curCpuVal");
+            const curRamVal = document.getElementById("curRamVal");
+            const curHotplugFlags = document.getElementById("curHotplugFlags");
+            const curCpuType = document.getElementById("curCpuType");
+            const hotplugVmStatusBadge = document.getElementById("hotplugVmStatusBadge");
+
+            if (curCpuVal) curCpuVal.textContent = `${hw.cores} vCPU (${hw.sockets || 1} Sockets)`;
+            if (curRamVal) curRamVal.textContent = `${hw.memoryMb} MB (~ ${(hw.memoryMb / 1024).toFixed(1)} GB)`;
+            if (curHotplugFlags) curHotplugFlags.textContent = hw.hotplug || "network,disk,usb,memory,cpu";
+            if (curCpuType) curCpuType.textContent = hw.cpuType || "host";
+            if (hotplugVmStatusBadge) {
+                hotplugVmStatusBadge.textContent = (hw.status || "RUNNING").toUpperCase();
+            }
+
+            // 2. Set form values
+            if (hotplugCores) hotplugCores.value = hw.cores;
+            if (hotplugCoresRange) hotplugCoresRange.value = hw.cores;
+            if (hotplugMemoryMb) hotplugMemoryMb.value = hw.memoryMb;
+            if (hotplugMemoryRange) hotplugMemoryRange.value = hw.memoryMb;
+            if (hotplugMemoryGbHint) hotplugMemoryGbHint.textContent = `~ ${(hw.memoryMb / 1024).toFixed(1)} GB`;
+
+            // 3. Render Attached Disks Table
+            if (hotplugDisksTableBody) {
+                if (!hw.disks || hw.disks.length === 0) {
+                    hotplugDisksTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted" style="padding: 20px;">Không tìm thấy đĩa nào</td></tr>`;
+                } else {
+                    hotplugDisksTableBody.innerHTML = hw.disks.map(disk => {
+                        const isBoot = disk.isBoot;
+                        const badgeType = isBoot
+                            ? `<span class="disk-badge-boot"><i data-lucide="shield" style="width:10px;height:10px;display:inline;"></i> OS / Boot</span>`
+                            : `<span class="disk-badge-data"><i data-lucide="database" style="width:10px;height:10px;display:inline;"></i> Data Disk</span>`;
+
+                        let actions = `
+                            <div style="display:flex; justify-content:flex-end; gap:6px; align-items:center;">
+                                <button type="button" class="btn-action-sm" style="border-color:rgba(56,189,248,0.3); color:#38bdf8;" onclick="promptResizeDisk('${node}', ${vmid}', '${disk.slot}', '${disk.size}')" title="Mở rộng dung lượng đĩa trực tuyến">
+                                    <i data-lucide="maximize-2" class="btn-icon-xs"></i>
+                                    <span>Mở Rộng</span>
+                                </button>
+                        `;
+
+                        if (!isBoot) {
+                            actions += `
+                                <button type="button" class="btn-danger-sm" onclick="detachSecondaryDisk('${node}', ${vmid}', '${disk.slot}')" title="Gỡ đĩa phụ này">
+                                    <i data-lucide="trash-2" class="btn-icon-xs"></i>
+                                    <span>Gỡ Đĩa</span>
+                                </button>
+                            `;
+                        }
+                        actions += `</div>`;
+
+                        return `
+                            <tr>
+                                <td><span class="disk-slot-pill">${disk.slot}</span></td>
+                                <td><strong>${disk.storage}</strong></td>
+                                <td><strong style="color:#38bdf8;">${disk.size}</strong></td>
+                                <td>${badgeType}</td>
+                                <td class="text-right">${actions}</td>
+                            </tr>
+                        `;
+                    }).join("");
+                }
+            }
+
+            // 4. Điền danh sách Storage Pools và Available Slots vào Form Attach
+            const attachStorageSelect = document.getElementById("attachStorageSelect");
+            const nodeData = (cachedClusterData || []).find(n => n.node === node);
+            if (attachStorageSelect && nodeData && nodeData.storages) {
+                attachStorageSelect.innerHTML = nodeData.storages.map(s => `<option value="${s.storage}">${s.storage} (${s.type}) - ${formatBytes(s.avail)} khả dụng</option>`).join("");
+            }
+
+            const attachSlotSelect = document.getElementById("attachSlotSelect");
+            if (attachSlotSelect && hw.availableSlots) {
+                attachSlotSelect.innerHTML = hw.availableSlots.map(s => `<option value="${s}">${s}</option>`).join("");
+            }
+
+            if (window.lucide) window.lucide.createIcons();
+        } catch (err) {
+            if (hotplugDisksTableBody) {
+                hotplugDisksTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger" style="padding: 20px;">Lỗi: ${err.message}</td></tr>`;
+            }
+        }
+    }
+
+    // Submit Hotplug CPU / RAM
+    if (formHotplugCpuRam) {
+        formHotplugCpuRam.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            if (!currentHotplugVm) return;
+
+            const cores = Number(hotplugCores.value);
+            const memoryMb = Number(hotplugMemoryMb.value);
+            const btnSubmit = document.getElementById("btnSubmitHotplug");
+            if (btnSubmit) btnSubmit.disabled = true;
+
+            showToast(`⚡ Đang điều chỉnh cấu hình nóng (${cores} vCPU, ${memoryMb} MB RAM)...`);
+
+            try {
+                const res = await fetch(`/api/nodes/${currentHotplugVm.node}/vms/${currentHotplugVm.vmid}/hardware/hotplug`, {
+                    method: "PUT",
+                    headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ cores, memoryMb })
+                });
+                const result = await res.json();
+                if (result.success) {
+                    showToast("✅ Đã thay đổi nóng cấu hình phần cứng thành công!");
+                    await loadVmHardwareDetails();
+                    setTimeout(loadClusterResources, 1500);
+                } else {
+                    showRbacAlert(`⛔ Lỗi Hotplug: ${result.error}`);
+                }
+            } catch (err) {
+                showRbacAlert(`⛔ Lỗi kết nối: ${err.message}`);
+            } finally {
+                if (btnSubmit) btnSubmit.disabled = false;
+            }
+        });
+    }
+
+    // Submit Attach Secondary Disk
+    if (formAttachDisk) {
+        formAttachDisk.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            if (!currentHotplugVm) return;
+
+            const storage = document.getElementById("attachStorageSelect").value;
+            const sizeGb = Number(document.getElementById("attachSizeGb").value);
+            const slot = document.getElementById("attachSlotSelect").value;
+            const discard = document.getElementById("attachDiscardCheck").checked;
+
+            const btnSubmit = document.getElementById("btnSubmitAttachDisk");
+            if (btnSubmit) btnSubmit.disabled = true;
+
+            showToast(`💾 Đang gắn thêm đĩa ${slot} (${sizeGb} GB trên ${storage})...`);
+
+            try {
+                const res = await fetch(`/api/nodes/${currentHotplugVm.node}/vms/${currentHotplugVm.vmid}/disks/attach`, {
+                    method: "POST",
+                    headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ storage, sizeGb, slot, discard })
+                });
+                const result = await res.json();
+                if (result.success) {
+                    showToast(`✅ Đã gắn đĩa ${slot} (${sizeGb} GB) thành công!`);
+                    await loadVmHardwareDetails();
+                    setTimeout(loadClusterResources, 1500);
+                } else {
+                    showRbacAlert(`⛔ Lỗi gắn đĩa: ${result.error}`);
+                }
+            } catch (err) {
+                showRbacAlert(`⛔ Lỗi kết nối: ${err.message}`);
+            } finally {
+                if (btnSubmit) btnSubmit.disabled = false;
+            }
+        });
+    }
+
+    // Prompt Online Disk Resize
+    window.promptResizeDisk = async (node, vmid, slot, curSize) => {
+        const sizeToAdd = prompt(`💾 MỞ RỘNG DUNG LƯỢNG ĐĨA [${slot}]\nDung lượng hiện tại: ${curSize}\n\nNhập dung lượng muốn TĂNG THÊM (ví dụ: +10G hoặc +50G):`, "+10G");
+        if (!sizeToAdd) return;
+
+        showToast(`💾 Đang mở rộng đĩa ${slot} thêm ${sizeToAdd}...`);
+        try {
+            const res = await fetch(`/api/nodes/${node}/vms/${vmid}/disks/resize`, {
+                method: "POST",
+                headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+                body: JSON.stringify({ diskSlot: slot, size: sizeToAdd })
+            });
+            const result = await res.json();
+            if (result.success) {
+                showToast(`✅ Đã mở rộng đĩa ${slot} thành công!`);
+                await loadVmHardwareDetails();
+                setTimeout(loadClusterResources, 1500);
+            } else {
+                showRbacAlert(`⛔ Lỗi mở rộng đĩa: ${result.error}`);
+            }
+        } catch (err) {
+            showRbacAlert(`⛔ Lỗi kết nối: ${err.message}`);
+        }
+    };
+
+    // Detach Secondary Disk
+    window.detachSecondaryDisk = async (node, vmid, slot) => {
+        if (!confirm(`🗑️ Bạn có chắc chắn muốn GỠ BỎ ổ đĩa phụ '${slot}' khỏi máy ảo #${vmid} không?`)) return;
+
+        showToast(`💾 Đang gỡ bỏ đĩa ${slot}...`);
+        try {
+            const res = await fetch(`/api/nodes/${node}/vms/${vmid}/disks/${slot}`, {
+                method: "DELETE",
+                headers: getAuthHeaders()
+            });
+            const result = await res.json();
+            if (result.success) {
+                showToast(`✅ Đã gỡ bỏ đĩa ${slot} thành công!`);
+                await loadVmHardwareDetails();
+                setTimeout(loadClusterResources, 1500);
+            } else {
+                showRbacAlert(`⛔ Lỗi gỡ đĩa: ${result.error}`);
+            }
+        } catch (err) {
+            showRbacAlert(`⛔ Lỗi kết nối: ${err.message}`);
+        }
+    };
+
+    // Tự động load dữ liệu Proxmox & Cảnh báo ngay khi mở trang
     loadClusterResources();
+    loadClusterAlerts();
+
+    // Chu kỳ tự động kiểm tra cảnh báo nền mỗi 20 giây
+    setInterval(loadClusterAlerts, 20000);
 });

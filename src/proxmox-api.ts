@@ -98,20 +98,113 @@ export class ProxmoxApiClient {
             body: {
                 snapname,
                 description: description || "",
-                vmstate: vmstate ? 1 : 0
-            }
+                vmstate: vmstate ? 1 : 0,
+            },
         });
     }
 
     async rollbackVmSnapshot(nodeName: string, vmid: number | string, snapname: string) {
         return await this.request(`/nodes/${nodeName}/qemu/${vmid}/snapshot/${snapname}/rollback`, {
-            method: "POST"
+            method: "POST",
         });
     }
 
     async deleteVmSnapshot(nodeName: string, vmid: number | string, snapname: string) {
         return await this.request(`/nodes/${nodeName}/qemu/${vmid}/snapshot/${snapname}`, {
-            method: "DELETE"
+            method: "DELETE",
+        });
+    }
+
+    // ==========================================
+    // PROXMOX FIREWALL & SECURITY GROUPS API
+    // ==========================================
+    async getVmFirewallRules(nodeName: string, vmid: number | string) {
+        try {
+            return await this.request(`/nodes/${nodeName}/qemu/${vmid}/firewall/rules`);
+        } catch (e) {
+            return [];
+        }
+    }
+
+    async getVmFirewallOptions(nodeName: string, vmid: number | string) {
+        try {
+            return await this.request(`/nodes/${nodeName}/qemu/${vmid}/firewall/options`);
+        } catch (e) {
+            return { enable: 1, policy_in: "DROP", policy_out: "ACCEPT" };
+        }
+    }
+
+    async setVmFirewallOptions(nodeName: string, vmid: number | string, options: { enable?: number | boolean; policy_in?: string; policy_out?: string }) {
+        const body: Record<string, any> = {};
+        if (options.enable !== undefined) body.enable = options.enable ? 1 : 0;
+        if (options.policy_in) body.policy_in = options.policy_in;
+        if (options.policy_out) body.policy_out = options.policy_out;
+        return await this.request(`/nodes/${nodeName}/qemu/${vmid}/firewall/options`, {
+            method: "PUT",
+            body,
+        });
+    }
+
+    async addVmFirewallRule(nodeName: string, vmid: number | string, rule: {
+        action: "ACCEPT" | "DROP" | "REJECT";
+        type: "in" | "out";
+        proto?: "tcp" | "udp" | "icmp" | "any";
+        dport?: string;
+        sport?: string;
+        source?: string;
+        dest?: string;
+        comment?: string;
+        enable?: number | boolean;
+    }) {
+        const body: Record<string, any> = {
+            action: rule.action || "ACCEPT",
+            type: rule.type || "in",
+            enable: rule.enable !== undefined ? (rule.enable ? 1 : 0) : 1,
+        };
+        if (rule.proto && rule.proto !== "any") body.proto = rule.proto;
+        if (rule.dport) body.dport = String(rule.dport).trim();
+        if (rule.sport) body.sport = String(rule.sport).trim();
+        if (rule.source) body.source = String(rule.source).trim();
+        if (rule.dest) body.dest = String(rule.dest).trim();
+        if (rule.comment) body.comment = String(rule.comment).trim();
+
+        return await this.request(`/nodes/${nodeName}/qemu/${vmid}/firewall/rules`, {
+            method: "POST",
+            body,
+        });
+    }
+
+    async updateVmFirewallRule(nodeName: string, vmid: number | string, pos: number, rule: {
+        action?: "ACCEPT" | "DROP" | "REJECT";
+        type?: "in" | "out";
+        proto?: "tcp" | "udp" | "icmp" | "any";
+        dport?: string;
+        sport?: string;
+        source?: string;
+        dest?: string;
+        comment?: string;
+        enable?: number | boolean;
+    }) {
+        const body: Record<string, any> = {};
+        if (rule.action) body.action = rule.action;
+        if (rule.type) body.type = rule.type;
+        if (rule.enable !== undefined) body.enable = rule.enable ? 1 : 0;
+        if (rule.proto) body.proto = rule.proto === "any" ? "" : rule.proto;
+        if (rule.dport !== undefined) body.dport = String(rule.dport).trim();
+        if (rule.sport !== undefined) body.sport = String(rule.sport).trim();
+        if (rule.source !== undefined) body.source = String(rule.source).trim();
+        if (rule.dest !== undefined) body.dest = String(rule.dest).trim();
+        if (rule.comment !== undefined) body.comment = String(rule.comment).trim();
+
+        return await this.request(`/nodes/${nodeName}/qemu/${vmid}/firewall/rules/${pos}`, {
+            method: "PUT",
+            body,
+        });
+    }
+
+    async deleteVmFirewallRule(nodeName: string, vmid: number | string, pos: number) {
+        return await this.request(`/nodes/${nodeName}/qemu/${vmid}/firewall/rules/${pos}`, {
+            method: "DELETE",
         });
     }
 
@@ -357,6 +450,148 @@ export class ProxmoxApiClient {
         }
 
         return nodesDetails;
+    }
+
+    // ==========================================
+    // HARDWARE HOTPLUG & MULTI-DISK MANAGEMENT
+    // ==========================================
+    async updateVmHardware(nodeName: string, vmid: number | string, config: { cores?: number; memoryMb?: number; hotplug?: string }) {
+        const body: Record<string, any> = {};
+        if (config.cores !== undefined) body.cores = Number(config.cores);
+        if (config.memoryMb !== undefined) body.memory = Number(config.memoryMb);
+        if (config.hotplug) body.hotplug = config.hotplug;
+        else body.hotplug = "network,disk,usb,memory,cpu";
+
+        return await this.request(`/nodes/${nodeName}/qemu/${vmid}/config`, {
+            method: "PUT",
+            body,
+        });
+    }
+
+    async resizeVmDisk(nodeName: string, vmid: number | string, diskSlot: string, sizeStr: string) {
+        // sizeStr can be e.g. "+10G", "+20G", "50G", "100G"
+        let formattedSize = String(sizeStr).trim();
+        if (!formattedSize.startsWith("+") && !formattedSize.toLowerCase().endsWith("g") && !formattedSize.toLowerCase().endsWith("m")) {
+            formattedSize = `+${formattedSize}G`;
+        }
+        return await this.request(`/nodes/${nodeName}/qemu/${vmid}/resize`, {
+            method: "PUT",
+            body: {
+                disk: diskSlot,
+                size: formattedSize,
+            },
+        });
+    }
+
+    async attachSecondaryDisk(nodeName: string, vmid: number | string, options: {
+        storage: string;
+        sizeGb: number;
+        slot?: string;
+        discard?: boolean;
+        cache?: string;
+    }) {
+        const slot = options.slot || "scsi1";
+        const storage = options.storage || "local-lvm";
+        const sizeGb = options.sizeGb || 20;
+        const discard = options.discard !== false ? "discard=on," : "";
+        const cache = options.cache ? `cache=${options.cache},` : "";
+
+        // In Proxmox VE: `scsi1: local-lvm:20,discard=on,iothread=1` allocates and hotplugs immediately
+        const diskValue = `${storage}:${sizeGb},${discard}${cache}iothread=1`.replace(/,+$/, "");
+
+        return await this.request(`/nodes/${nodeName}/qemu/${vmid}/config`, {
+            method: "PUT",
+            body: {
+                [slot]: diskValue,
+            },
+        });
+    }
+
+    async detachVmDisk(nodeName: string, vmid: number | string, diskSlot: string) {
+        if (diskSlot === "scsi0" || diskSlot === "bootdisk") {
+            throw new Error("Không thể gỡ đĩa chính (OS / Boot Disk). Chỉ có thể gỡ đĩa phụ!");
+        }
+        return await this.request(`/nodes/${nodeName}/qemu/${vmid}/config`, {
+            method: "PUT",
+            body: {
+                delete: diskSlot,
+            },
+        });
+    }
+
+    async getVmHardwareDetails(nodeName: string, vmid: number | string) {
+        const config = await this.getVmConfig(nodeName, vmid);
+        const status = await this.getVmStatus(nodeName, vmid);
+        if (!config) throw new Error(`Không tìm thấy cấu hình VM #${vmid} trên node ${nodeName}`);
+
+        const disks: Array<{
+            slot: string;
+            isBoot: boolean;
+            storage: string;
+            volume: string;
+            size: string;
+            sizeGb: number;
+            rawConfig: string;
+        }> = [];
+
+        // Scan all disk slots: scsi0-15, virtio0-15, sata0-5, ide0-3
+        const diskPrefixes = ["scsi", "virtio", "sata", "ide"];
+        for (const key of Object.keys(config)) {
+            const prefix = diskPrefixes.find(p => key.startsWith(p) && /^[a-z]+[0-9]+$/.test(key));
+            if (prefix) {
+                const val = String(config[key]);
+                if (val && !val.includes("media=cdrom")) {
+                    const parts = val.split(",");
+                    const volPart = parts[0] || "";
+                    const storagePool = volPart.includes(":") ? volPart.split(":")[0] : "unknown";
+                    const sizeMatch = val.match(/size=([0-9.]+[GMKT]?)/i);
+                    let sizeStr = sizeMatch ? sizeMatch[1] : "N/A";
+                    let sizeGb = 0;
+                    if (sizeStr.endsWith("G") || sizeStr.endsWith("g")) {
+                        sizeGb = parseFloat(sizeStr);
+                    } else if (sizeStr.endsWith("M") || sizeStr.endsWith("m")) {
+                        sizeGb = parseFloat(sizeStr) / 1024;
+                    }
+
+                    disks.push({
+                        slot: key,
+                        isBoot: key === "scsi0" || key === (config.bootdisk || "scsi0"),
+                        storage: storagePool,
+                        volume: volPart,
+                        size: sizeStr,
+                        sizeGb: Math.round(sizeGb * 10) / 10,
+                        rawConfig: val,
+                    });
+                }
+            }
+        }
+
+        // Sắp xếp đĩa: scsi0 trước, sau đó scsi1, scsi2...
+        disks.sort((a, b) => a.slot.localeCompare(b.slot, undefined, { numeric: true }));
+
+        // Tìm các slot còn trống để gắn thêm đĩa phụ (scsi1 -> scsi6)
+        const usedSlots = new Set(disks.map(d => d.slot));
+        const availableSlots: string[] = [];
+        for (let i = 1; i <= 6; i++) {
+            const s = `scsi${i}`;
+            if (!usedSlots.has(s)) availableSlots.push(s);
+        }
+
+        return {
+            vmid,
+            nodeName,
+            name: config.name || `VM #${vmid}`,
+            cores: Number(config.cores || 2),
+            sockets: Number(config.sockets || 1),
+            cpuType: config.cpu || "host",
+            memoryMb: Number(config.memory || 2048),
+            balloon: config.balloon ? Number(config.balloon) : undefined,
+            hotplug: config.hotplug || "network,disk,usb",
+            status: status?.status || "unknown",
+            disks,
+            availableSlots,
+            qemuAgent: !!config.agent,
+        };
     }
 }
 

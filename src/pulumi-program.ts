@@ -23,6 +23,13 @@ export interface VmConfig {
     protection?: boolean;
     userData?: string; // Custom Cloud-init User-Data Script / Post-provisioning Bootstrap
     unprivileged?: boolean; // LXC Unprivileged Container
+    secondaryDisks?: Array<{
+        name?: string;
+        datastoreId: string;
+        sizeGb: number;
+        interface?: string;
+        discard?: string;
+    }>;
 }
 
 export function createVmProgram(config: VmConfig) {
@@ -167,7 +174,7 @@ export function createVmProgram(config: VmConfig) {
             machine: "q35",
             protection: isProtected,
             tags: combinedTags.length > 0 ? combinedTags : undefined,
-            hotplug: "network,disk,usb",
+            hotplug: "network,disk,usb,memory,cpu",
             cpu: {
                 cores: config.cores,
                 type: config.cpuType || "host",
@@ -176,15 +183,30 @@ export function createVmProgram(config: VmConfig) {
             memory: {
                 dedicated: config.memoryMb,
             },
-            disks: [
-                {
-                    datastoreId: targetDatastore,
-                    interface: "scsi0",
-                    fileId: config.diskImageId,
-                    size: config.diskSizeGb,
-                    discard: "on",
-                },
-            ],
+            disks: (() => {
+                const diskList: any[] = [
+                    {
+                        datastoreId: targetDatastore,
+                        interface: "scsi0",
+                        fileId: config.diskImageId,
+                        size: config.diskSizeGb,
+                        discard: "on",
+                    },
+                ];
+
+                if (Array.isArray(config.secondaryDisks) && config.secondaryDisks.length > 0) {
+                    config.secondaryDisks.forEach((sec, idx) => {
+                        diskList.push({
+                            datastoreId: sec.datastoreId || targetDatastore,
+                            interface: sec.interface || `scsi${idx + 1}`,
+                            size: sec.sizeGb,
+                            discard: sec.discard || "on",
+                        });
+                    });
+                }
+
+                return diskList;
+            })(),
             bootOrders: ["scsi0"],
             scsiHardware: "virtio-scsi-single",
             initialization: {
@@ -210,6 +232,7 @@ export function createVmProgram(config: VmConfig) {
                     bridge: config.bridge || "vmbr0",
                     model: "virtio",
                     vlanId: config.vlanTag ? Number(config.vlanTag) : undefined,
+                    firewall: true,
                 },
             ],
             operatingSystem: {

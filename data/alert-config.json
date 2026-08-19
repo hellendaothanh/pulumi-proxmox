@@ -1,0 +1,12 @@
+{
+  "storagePercent": 85,
+  "cpuPercent": 85,
+  "ramPercent": 85,
+  "checkIntervalSec": 30,
+  "enabled": true,
+  "telegramEnabled": false,
+  "telegramBotToken": "",
+  "telegramChatId": "",
+  "webhookEnabled": false,
+  "webhookUrl": ""
+}

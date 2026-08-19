@@ -55,11 +55,18 @@
                 <div class="user-profile-badge" id="userProfileBadge">
                     <span class="user-avatar" id="userAvatar"><i data-lucide="shield" class="user-svg-icon"></i></span>
                     <div class="user-info">
-                        <span class="user-name" id="userDisplayName">Administrator</span>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span class="user-name" id="userDisplayName">Administrator</span>
+                            <span class="provider-pill hidden" id="userProviderBadge">SSO</span>
+                        </div>
                         <span class="user-role-badge role-admin" id="userRoleBadge">Admin</span>
                     </div>
                 </div>
                 <div class="user-action-buttons">
+                    <button id="btnOpenAlertsModal" class="btn-icon-action btn-alert-bell" title="Trung tâm Cảnh Báo Ngưỡng Tài Nguyên (Cluster Alerting)">
+                        <i data-lucide="bell" class="btn-icon-sm"></i>
+                        <span id="headerAlertBadgeCount" class="alert-pulse-badge hidden">0</span>
+                    </button>
                     <button id="btnChangePasswordModal" class="btn-icon-action" title="Đổi mật khẩu tài khoản">
                         <i data-lucide="key" class="btn-icon-sm"></i>
                     </button>
@@ -73,6 +80,28 @@
                 </div>
             </div>
         </header>
+
+        <!-- Cluster Alert Notification Banner (Real-time sticky banner) -->
+        <div id="clusterAlertBanner" class="cluster-alert-banner hidden">
+            <div class="alert-banner-content">
+                <div class="alert-banner-icon-box">
+                    <i data-lucide="alert-triangle" class="alert-banner-icon"></i>
+                </div>
+                <div class="alert-banner-text">
+                    <strong id="alertBannerTitle">⚠️ Phát hiện cảnh báo vượt ngưỡng tài nguyên cụm!</strong>
+                    <p id="alertBannerDetails">Storage Pool hoặc Node đang hoạt động ở mức tải cao.</p>
+                </div>
+            </div>
+            <div class="alert-banner-actions">
+                <button id="btnBannerViewAlerts" class="btn-banner-action">
+                    <i data-lucide="sliders" class="btn-icon-xs"></i>
+                    <span>Chi Tiết & Cấu Hình</span>
+                </button>
+                <button id="btnDismissAlertBanner" class="btn-banner-dismiss" title="Tạm đóng banner">
+                    <i data-lucide="x" class="btn-icon-xs"></i>
+                </button>
+            </div>
+        </div>
 
         <!-- TAB 1: CLUSTER OVERVIEW (Nodes, Storages, Images, VMs) -->
         <section id="tab-overview" class="tab-content active">
@@ -381,6 +410,26 @@
                                         </div>
                                         <input type="range" id="diskSizeGbRange" min="10" max="200" value="20" step="5" class="spec-range-slider">
                                     </div>
+                                </div>
+
+                                <!-- Multi-Disk Attachment (Secondary Virtual Disks) -->
+                                <div class="multi-disk-section" style="margin-top: 10px; margin-bottom: 16px;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+                                        <div style="display:flex; align-items:center; gap:6px;">
+                                            <i data-lucide="layers" class="field-icon" style="color:#38bdf8;"></i>
+                                            <strong style="font-size:12.5px; color:#f8fafc;">Ổ Đĩa Phụ Mở Rộng (Secondary Disks):</strong>
+                                        </div>
+                                        <button type="button" id="btnAddSecondaryDisk" class="btn-secondary" style="padding: 4px 10px; font-size: 11.5px;">
+                                            <i data-lucide="plus" class="btn-icon-xs"></i>
+                                            <span>+ Thêm Đĩa Phụ</span>
+                                        </button>
+                                    </div>
+                                    <div id="secondaryDisksContainer" class="secondary-disks-list">
+                                        <!-- Dynamic secondary disk rows -->
+                                    </div>
+                                    <small class="text-muted" style="font-size:11px; display:block; margin-top:4px;">
+                                        💡 Bạn có thể gắn thêm các ổ đĩa dữ liệu phụ trên các Storage Pool khác nhau (ví dụ: OS trên NVMe/local-lvm, Data trên ZFS/HDD).
+                                    </small>
                                 </div>
 
                                 <!-- Network & VLAN Settings -->
@@ -839,6 +888,150 @@
         </div>
     </div>
 
+    <!-- Modal Quản Lý Firewall & Security Groups Trực Quan -->
+    <div id="firewallModal" class="modal-backdrop hidden">
+        <div class="modal-card modal-card-xl">
+            <div class="modal-header">
+                <div class="card-title-group">
+                    <i data-lucide="shield" class="icon-accent"></i>
+                    <div>
+                        <h3 id="firewallModalTitle">Quản Lý Firewall & Security Groups</h3>
+                        <small id="firewallModalSubtitle" class="text-muted" style="font-size: 11px;">Mở/đóng Port và Kiểm soát truy cập mạng Proxmox VE</small>
+                    </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div class="firewall-status-toggle">
+                        <label class="toggle-switch-label" title="Bật/Tắt Firewall của máy ảo">
+                            <input type="checkbox" id="toggleVmFirewall">
+                            <span class="toggle-slider"></span>
+                            <span id="firewallEnableStatusText" style="font-size:12px; font-weight:600; color:#38bdf8;">Firewall: ON</span>
+                        </label>
+                    </div>
+                    <button id="btnCloseFirewallModal" class="btn-icon-close">
+                        <i data-lucide="x" class="btn-icon-sm"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-body" style="max-height: 80vh; overflow-y: auto;">
+                <!-- 1-Click Security Presets Quick Bar -->
+                <div class="firewall-presets-wrapper">
+                    <div class="presets-header">
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <i data-lucide="zap" class="field-icon" style="color:#f59e0b;"></i>
+                            <strong style="font-size:12.5px; color:#f8fafc;">1-Click Security Presets (Mẫu Mở Port Nhanh):</strong>
+                        </div>
+                        <span class="text-muted" style="font-size:11px;">Click để thêm ngay Rule mở cổng tương ứng</span>
+                    </div>
+                    <div class="firewall-presets-grid">
+                        <button type="button" class="btn-fw-preset" onclick="applyFirewallPreset('ssh')">
+                            <span class="fw-preset-name"><i data-lucide="terminal" class="btn-icon-xs"></i> SSH (22)</span>
+                            <span class="fw-preset-desc">Remote Terminal</span>
+                        </button>
+                        <button type="button" class="btn-fw-preset" onclick="applyFirewallPreset('web')">
+                            <span class="fw-preset-name"><i data-lucide="globe" class="btn-icon-xs"></i> Web (80/443)</span>
+                            <span class="fw-preset-desc">HTTP & HTTPS</span>
+                        </button>
+                        <button type="button" class="btn-fw-preset" onclick="applyFirewallPreset('database')">
+                            <span class="fw-preset-name"><i data-lucide="database" class="btn-icon-xs"></i> PostgreSQL/MySQL</span>
+                            <span class="fw-preset-desc">Ports 5432 / 3306</span>
+                        </button>
+                        <button type="button" class="btn-fw-preset" onclick="applyFirewallPreset('redis')">
+                            <span class="fw-preset-name"><i data-lucide="zap" class="btn-icon-xs"></i> Redis Cache</span>
+                            <span class="fw-preset-desc">Port 6379</span>
+                        </button>
+                        <button type="button" class="btn-fw-preset" onclick="applyFirewallPreset('k8s')">
+                            <span class="fw-preset-name"><i data-lucide="boxes" class="btn-icon-xs"></i> K8s API (6443)</span>
+                            <span class="fw-preset-desc">Kubernetes Master</span>
+                        </button>
+                        <button type="button" class="btn-fw-preset" onclick="applyFirewallPreset('ping')">
+                            <span class="fw-preset-name"><i data-lucide="activity" class="btn-icon-xs"></i> ICMP Ping</span>
+                            <span class="fw-preset-desc">Allow Ping request</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Form Thêm Rule Mới Trực Quan -->
+                <div class="firewall-create-box">
+                    <div class="sub-section-title" style="margin-bottom:12px;">
+                        <i data-lucide="plus-circle" class="field-icon"></i>
+                        <span>Thêm Quy Tắc Firewall (Security Rule)</span>
+                    </div>
+                    <form id="formCreateFirewallRule" class="fw-rule-form-grid">
+                        <div class="form-group">
+                            <label class="form-label" for="fwAction">Hành Động (Action)</label>
+                            <select id="fwAction" class="form-input" required>
+                                <option value="ACCEPT" selected>ACCEPT (Cho phép)</option>
+                                <option value="DROP">DROP (Chặn im lặng)</option>
+                                <option value="REJECT">REJECT (Từ chối phản hồi)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="fwType">Hướng (Direction)</label>
+                            <select id="fwType" class="form-input" required>
+                                <option value="in" selected>IN (Inbound / Chiều vào)</option>
+                                <option value="out">OUT (Outbound / Chiều ra)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="fwProto">Giao Thức (Protocol)</label>
+                            <select id="fwProto" class="form-input">
+                                <option value="tcp" selected>TCP</option>
+                                <option value="udp">UDP</option>
+                                <option value="icmp">ICMP (Ping)</option>
+                                <option value="any">Tất cả (ANY)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="fwDport">Cổng Đích (Port / dport)</label>
+                            <input type="text" id="fwDport" class="form-input" placeholder="vd: 80, 443, 8000:8080">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="fwSource">Nguồn Cho Phép (Source IP / CIDR)</label>
+                            <input type="text" id="fwSource" class="form-input" placeholder="vd: 0.0.0.0/0 hoặc 192.168.1.50">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="fwComment">Ghi Chú / Mục Đích</label>
+                            <input type="text" id="fwComment" class="form-input" placeholder="vd: Mở port Web Server Nginx">
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1; display:flex; justify-content:flex-end;">
+                            <button type="submit" id="btnSubmitFwRule" class="btn-primary" style="width: auto; padding: 9px 20px;">
+                                <i data-lucide="shield-plus" class="btn-icon-sm"></i>
+                                <span>Thêm Quy Tắc Mạng</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Bảng Danh Sách Rules Trực Quan -->
+                <div class="sub-section-title" style="margin: 18px 0 10px 0;">
+                    <i data-lucide="list-filter" class="field-icon"></i>
+                    <span>Danh Sách Quy Tắc Firewall Hiện Hành</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="vms-overview-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px;">Bật/Tắt</th>
+                                <th style="width: 90px;">Hành Động</th>
+                                <th style="width: 80px;">Hướng</th>
+                                <th style="width: 80px;">Giao Thức</th>
+                                <th style="width: 120px;">Cổng (Port)</th>
+                                <th>Nguồn (Source)</th>
+                                <th>Ghi Chú</th>
+                                <th class="text-right" style="width: 100px;">Thao Tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="firewallRulesTableBody">
+                            <tr>
+                                <td colspan="8" class="text-center text-muted" style="padding: 24px;">Đang tải danh sách Security Rules...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Đăng Nhập Hệ Thống (Login Modal Backdrop) -->
     <div id="loginModal" class="login-modal-backdrop hidden">
         <div class="login-card">
@@ -846,15 +1039,49 @@
                 <div class="login-logo">
                     <i data-lucide="shield-check" class="login-logo-svg"></i>
                 </div>
-                <h2>Xác Thực Người Dùng</h2>
-                <p>Đăng nhập để quản lý hạ tầng cụm Proxmox VE</p>
+                <h2>Xác Thực & Đăng Nhập</h2>
+                <p>Đăng nhập tập trung để quản trị hạ tầng Proxmox VE</p>
+            </div>
+
+            <!-- SSO Authentication Error Banner (nếu có lỗi trả về từ Callback) -->
+            <div id="ssoErrorBanner" class="login-error-alert hidden" style="margin-bottom: 16px;">
+                <i data-lucide="alert-triangle" class="btn-icon-sm"></i>
+                <span id="ssoErrorText">Lỗi xác thực SSO</span>
+            </div>
+
+            <!-- Enterprise SSO Providers Section -->
+            <div id="ssoSection" class="sso-section">
+                <div class="sso-title" style="font-size:12px; color:#94a3b8; margin-bottom:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">
+                    <i data-lucide="key" class="field-icon" style="color:#38bdf8;"></i>
+                    <span>Đăng Nhập Tập Trung (SSO / OIDC):</span>
+                </div>
+                <div id="ssoButtonsContainer" class="sso-buttons-grid">
+                    <!-- Rendered dynamically -->
+                    <button type="button" class="btn-sso btn-sso-google" onclick="initiateSsoLogin('google')">
+                        <svg class="sso-icon-svg" viewBox="0 0 24 24" width="18" height="18"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+                        <span>Google Workspace</span>
+                    </button>
+                    <button type="button" class="btn-sso btn-sso-github" onclick="initiateSsoLogin('github')">
+                        <svg class="sso-icon-svg" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                        <span>GitHub SSO</span>
+                    </button>
+                    <button type="button" class="btn-sso btn-sso-oidc" onclick="initiateSsoLogin('oidc')">
+                        <i data-lucide="shield" class="btn-icon-xs" style="color:#a855f7;"></i>
+                        <span>Keycloak / Authelia</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- SSO / Local Divider -->
+            <div class="sso-divider">
+                <span>HOẶC TÀI KHOẢN NỘI BỘ (BREAK-GLASS)</span>
             </div>
 
             <!-- Demo Quick Accounts Selector -->
-            <div class="demo-accounts-box">
+            <div class="demo-accounts-box" id="demoAccountsBox">
                 <div class="demo-title">
                     <i data-lucide="users" class="field-icon"></i>
-                    <span>Chọn tài khoản truy cập nhanh (Demo RBAC):</span>
+                    <span>Tài khoản truy cập nhanh (Demo RBAC):</span>
                 </div>
                 <div class="demo-accounts-grid">
                     <button type="button" class="btn-demo-user active" onclick="fillLoginForm('admin')">
@@ -952,6 +1179,346 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Quản Lý Cảnh Báo Ngưỡng & Kênh Thông Báo (Cluster Alert Manager Modal) -->
+    <div id="alertManagerModal" class="modal-backdrop hidden">
+        <div class="modal-card modal-card-lg">
+            <div class="modal-header">
+                <div class="card-title-group">
+                    <i data-lucide="bell-ring" class="icon-accent" style="color: #f59e0b;"></i>
+                    <div>
+                        <h3>Trung Tâm Cảnh Báo Ngưỡng Tài Nguyên (Cluster Alerting)</h3>
+                        <small class="text-muted" style="font-size: 11.5px;">Tự động giám sát Storage ≥ 85%, quá tải CPU/RAM & gửi thông báo Telegram / Webhook</small>
+                    </div>
+                </div>
+                <button id="btnCloseAlertModal" class="btn-icon-close">
+                    <i data-lucide="x" class="btn-icon-sm"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="max-height: 80vh; overflow-y: auto;">
+                <!-- Modal Internal Tabs -->
+                <div class="modal-sub-tabs">
+                    <button type="button" class="modal-sub-tab active" data-alert-tab="tab-alert-status">
+                        <i data-lucide="activity" class="btn-icon-xs"></i>
+                        <span>Cảnh Báo Hoạt Động</span>
+                        <span id="modalActiveAlertBadge" class="badge-count hidden">0</span>
+                    </button>
+                    <button type="button" class="modal-sub-tab" data-alert-tab="tab-alert-config">
+                        <i data-lucide="settings" class="btn-icon-xs"></i>
+                        <span>Cấu Hình Ngưỡng & Thông Báo</span>
+                    </button>
+                    <button type="button" class="modal-sub-tab" data-alert-tab="tab-alert-history">
+                        <i data-lucide="history" class="btn-icon-xs"></i>
+                        <span>Lịch Sử Cảnh Báo</span>
+                    </button>
+                </div>
+
+                <!-- TAB 1: Active Alerts List -->
+                <div id="tab-alert-status" class="alert-tab-pane active">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <div style="font-size:12.5px; color:#cbd5e1;">
+                            <span id="activeAlertSummaryText">Đang tải danh sách cảnh báo...</span>
+                        </div>
+                        <button type="button" id="btnManualCheckAlerts" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">
+                            <i data-lucide="refresh-cw" class="btn-icon-xs"></i>
+                            <span>Quét Tức Thời</span>
+                        </button>
+                    </div>
+                    <div id="activeAlertsContainer" class="alerts-list-wrapper">
+                        <!-- Dynamic active alerts cards -->
+                    </div>
+                </div>
+
+                <!-- TAB 2: Thresholds & Channels Config -->
+                <div id="tab-alert-config" class="alert-tab-pane">
+                    <form id="formAlertConfig" class="alert-config-form">
+                        <div class="config-section-title">
+                            <i data-lucide="gauge" class="field-icon"></i>
+                            <strong>1. Thiết Lập Ngưỡng Kích Hoạt Cảnh Báo (%)</strong>
+                        </div>
+                        <div class="config-grid-3">
+                            <div class="form-group">
+                                <label for="cfgStorageThreshold">
+                                    <i data-lucide="hard-drive" class="field-icon"></i>
+                                    <span>Ngưỡng Storage Pool (%)</span>
+                                </label>
+                                <div class="input-unit-group">
+                                    <input type="number" id="cfgStorageThreshold" min="50" max="99" value="85" required class="form-input">
+                                    <span class="input-unit">%</span>
+                                </div>
+                                <small class="text-muted" style="font-size:11px;">Mặc định 85%. Kích hoạt khi ổ đĩa ≥ 85%.</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="cfgCpuThreshold">
+                                    <i data-lucide="cpu" class="field-icon"></i>
+                                    <span>Ngưỡng Node CPU (%)</span>
+                                </label>
+                                <div class="input-unit-group">
+                                    <input type="number" id="cfgCpuThreshold" min="50" max="99" value="85" required class="form-input">
+                                    <span class="input-unit">%</span>
+                                </div>
+                                <small class="text-muted" style="font-size:11px;">Mặc định 85%. Kích hoạt khi CPU ≥ 85%.</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="cfgRamThreshold">
+                                    <i data-lucide="memory-stick" class="field-icon"></i>
+                                    <span>Ngưỡng Node RAM (%)</span>
+                                </label>
+                                <div class="input-unit-group">
+                                    <input type="number" id="cfgRamThreshold" min="50" max="99" value="85" required class="form-input">
+                                    <span class="input-unit">%</span>
+                                </div>
+                                <small class="text-muted" style="font-size:11px;">Mặc định 85%. Kích hoạt khi RAM ≥ 85%.</small>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="margin-top: 12px;">
+                            <label for="cfgCheckInterval">
+                                <i data-lucide="clock" class="field-icon"></i>
+                                <span>Chu Kỳ Quét Nền Tự Động (Giây)</span>
+                            </label>
+                            <div class="input-unit-group" style="max-width: 260px;">
+                                <input type="number" id="cfgCheckInterval" min="10" max="600" value="30" required class="form-input">
+                                <span class="input-unit">Giây</span>
+                            </div>
+                        </div>
+
+                        <div class="config-section-title" style="margin-top: 20px;">
+                            <i data-lucide="send" class="field-icon"></i>
+                            <strong>2. Kênh Gửi Thông Báo Tự Động (Telegram & Webhook)</strong>
+                        </div>
+
+                        <!-- Telegram Config -->
+                        <div class="channel-card">
+                            <div class="channel-header">
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <i data-lucide="message-square" style="color:#38bdf8; width:18px;height:18px;"></i>
+                                    <strong>Telegram Bot Notification</strong>
+                                </div>
+                                <label class="toggle-switch-label">
+                                    <input type="checkbox" id="cfgTelegramEnabled">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="config-grid-2" style="margin-top: 10px;">
+                                <div class="form-group">
+                                    <label for="cfgTelegramBotToken">Telegram Bot Token</label>
+                                    <input type="password" id="cfgTelegramBotToken" class="form-input" placeholder="vd: 123456789:ABCdefGhIJKlmNoPQ...">
+                                </div>
+                                <div class="form-group">
+                                    <label for="cfgTelegramChatId">Telegram Chat ID / Group ID</label>
+                                    <input type="text" id="cfgTelegramChatId" class="form-input" placeholder="vd: -100123456789 hoặc 987654321">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Webhook Config -->
+                        <div class="channel-card" style="margin-top: 12px;">
+                            <div class="channel-header">
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <i data-lucide="webhook" style="color:#a855f7; width:18px;height:18px;"></i>
+                                    <strong>Generic Webhook (Discord / Slack / Teams)</strong>
+                                </div>
+                                <label class="toggle-switch-label">
+                                    <input type="checkbox" id="cfgWebhookEnabled">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="form-group" style="margin-top: 10px;">
+                                <label for="cfgWebhookUrl">Webhook URL (Hỗ trợ Discord / Slack / API Gateway)</label>
+                                <input type="url" id="cfgWebhookUrl" class="form-input" placeholder="https://discord.com/api/webhooks/... hoặc https://hooks.slack.com/services/...">
+                            </div>
+                        </div>
+
+                        <div id="alertConfigMsg" class="login-error-alert hidden" style="margin-top:14px;"></div>
+
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px;">
+                            <button type="button" id="btnTestAlertNotification" class="btn-secondary">
+                                <i data-lucide="send" class="btn-icon-xs"></i>
+                                <span>Gửi Thử Nghiệm (Test Alert)</span>
+                            </button>
+                            <button type="submit" id="btnSaveAlertConfig" class="btn-primary">
+                                <i data-lucide="save" class="btn-icon-xs"></i>
+                                <span>Lưu Cấu Hình Cảnh Báo</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- TAB 3: Alert History -->
+                <div id="tab-alert-history" class="alert-tab-pane">
+                    <div class="table-responsive">
+                        <table class="vms-overview-table">
+                            <thead>
+                                <tr>
+                                    <th>Thời Gian</th>
+                                    <th>Loại & Tài Nguyên</th>
+                                    <th>Node</th>
+                                    <th>Giá Trị</th>
+                                    <th>Mức Độ</th>
+                                    <th>Trạng Thái</th>
+                                </tr>
+                            </thead>
+                            <tbody id="alertHistoryTableBody">
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted" style="padding: 20px;">Đang tải lịch sử cảnh báo...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Cấu Hình Nóng (Hotplug Hardware) & Quản Lý Đa Ổ Đĩa -->
+    <div id="hotplugModal" class="modal-backdrop hidden">
+        <div class="modal-card modal-card-lg">
+            <div class="modal-header">
+                <div class="card-title-group">
+                    <i data-lucide="cpu" class="icon-accent" style="color: #38bdf8;"></i>
+                    <div>
+                        <h3 id="hotplugModalTitle">Cấu Hình Nóng (Hotplug Hardware) & Đa Ổ Đĩa</h3>
+                        <small id="hotplugModalSubtitle" class="text-muted" style="font-size: 11px;">Điều chỉnh trực tiếp vCPU, RAM & Gắn thêm ổ đĩa không cần reboot</small>
+                    </div>
+                </div>
+                <button id="btnCloseHotplugModal" class="btn-icon-close">
+                    <i data-lucide="x" class="btn-icon-sm"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="max-height: 80vh; overflow-y: auto;">
+                <!-- Modal Internal Tabs -->
+                <div class="modal-sub-tabs">
+                    <button type="button" class="modal-sub-tab active" data-hotplug-tab="tab-hotplug-cpuram">
+                        <i data-lucide="sliders" class="btn-icon-xs"></i>
+                        <span>Thay Đổi Nóng CPU & RAM</span>
+                    </button>
+                    <button type="button" class="modal-sub-tab" data-hotplug-tab="tab-hotplug-disks">
+                        <i data-lucide="hard-drive" class="btn-icon-xs"></i>
+                        <span>Quản Lý Đĩa & Mở Rộng Dung Lượng</span>
+                    </button>
+                </div>
+
+                <!-- TAB 1: Hotplug CPU & RAM -->
+                <div id="tab-hotplug-cpuram" class="hotplug-tab-pane active">
+                    <form id="formHotplugCpuRam">
+                        <div class="channel-card" style="margin-bottom: 16px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+                                <span style="font-size: 12.5px; color:#cbd5e1; font-weight:600;">Thông Số Hiện Tại Của Máy Ảo:</span>
+                                <span id="hotplugVmStatusBadge" class="tag-deployed">RUNNING</span>
+                            </div>
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; font-size:12px; color:#94a3b8;">
+                                <div>vCPU hiện tại: <strong id="curCpuVal" style="color:#f8fafc;">2 Cores</strong></div>
+                                <div>RAM hiện tại: <strong id="curRamVal" style="color:#f8fafc;">2048 MB (2 GB)</strong></div>
+                                <div>Cờ Hotplug: <code id="curHotplugFlags" style="color:#38bdf8;">disk,network,usb,memory,cpu</code></div>
+                                <div>Loại CPU: <span id="curCpuType" style="color:#cbd5e1;">host</span></div>
+                            </div>
+                        </div>
+
+                        <div class="form-row" style="margin-bottom: 16px;">
+                            <div class="form-group flex-1">
+                                <label for="hotplugCores">
+                                    <i data-lucide="cpu" class="field-icon"></i>
+                                    <span>vCPU Mới (Cores)</span>
+                                </label>
+                                <div class="numeric-input-group">
+                                    <input type="number" id="hotplugCores" min="1" max="64" value="2" step="1" required class="spec-number-input">
+                                    <span class="unit-suffix">vCPU</span>
+                                </div>
+                                <input type="range" id="hotplugCoresRange" min="1" max="32" value="2" step="1" class="spec-range-slider">
+                            </div>
+
+                            <div class="form-group flex-1">
+                                <label for="hotplugMemoryMb">
+                                    <i data-lucide="memory-stick" class="field-icon"></i>
+                                    <span>RAM Mới (MB)</span>
+                                </label>
+                                <div class="numeric-input-group">
+                                    <input type="number" id="hotplugMemoryMb" min="512" max="65536" value="2048" step="256" required class="spec-number-input">
+                                    <span class="unit-suffix">MB</span>
+                                </div>
+                                <input type="range" id="hotplugMemoryRange" min="512" max="16384" value="2048" step="512" class="spec-range-slider">
+                                <div style="font-size:11px; color:#38bdf8; margin-top:2px;" id="hotplugMemoryGbHint">~ 2.0 GB</div>
+                            </div>
+                        </div>
+
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span class="text-muted" style="font-size:11.5px;">⚡ Thay đổi có hiệu lực ngay lập tức không cần tắt máy ảo.</span>
+                            <button type="submit" id="btnSubmitHotplug" class="btn-primary">
+                                <i data-lucide="zap" class="btn-icon-xs"></i>
+                                <span>Áp Dụng Nóng (Hot Apply)</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- TAB 2: Multi-Disk & Live Resize -->
+                <div id="tab-hotplug-disks" class="hotplug-tab-pane">
+                    <div class="sub-section-title" style="margin-bottom:10px;">
+                        <i data-lucide="layers" class="field-icon"></i>
+                        <span>Danh Sách Ổ Đĩa Đang Gắn (Attached Disks)</span>
+                    </div>
+                    <div class="table-responsive" style="margin-bottom: 20px;">
+                        <table class="vms-overview-table">
+                            <thead>
+                                <tr>
+                                    <th>Slot</th>
+                                    <th>Storage Pool</th>
+                                    <th>Dung Lượng</th>
+                                    <th>Loại Đĩa</th>
+                                    <th class="text-right">Thao Tác Mở Rộng / Gỡ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="hotplugDisksTableBody">
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted" style="padding: 20px;">Đang tải danh sách đĩa...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Form Gắn Thêm Đĩa Phụ Mới -->
+                    <div class="channel-card">
+                        <div class="sub-section-title" style="margin-bottom:12px;">
+                            <i data-lucide="plus-circle" class="field-icon"></i>
+                            <span>Gắn Thêm Đĩa Phụ Mới (Hot-attach Secondary Virtual Disk)</span>
+                        </div>
+                        <form id="formAttachDisk" class="fw-rule-form-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+                            <div class="form-group">
+                                <label class="form-label" for="attachStorageSelect">Storage Pool Đích <span class="required-star">*</span></label>
+                                <select id="attachStorageSelect" class="form-input" required>
+                                    <option value="" disabled selected>Đang tải Storage Pools...</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="attachSizeGb">Dung Lượng (GB) <span class="required-star">*</span></label>
+                                <input type="number" id="attachSizeGb" min="1" max="2000" value="20" required class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="attachSlotSelect">Slot Bus</label>
+                                <select id="attachSlotSelect" class="form-input">
+                                    <option value="scsi1">scsi1</option>
+                                    <option value="scsi2">scsi2</option>
+                                    <option value="scsi3">scsi3</option>
+                                    <option value="scsi4">scsi4</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="grid-column: 1 / -1; display:flex; justify-content:space-between; align-items:center;">
+                                <label class="checkbox-label" style="font-size:12px;">
+                                    <input type="checkbox" id="attachDiscardCheck" checked>
+                                    <span>Bật TRIM/Discard (SSD Emulation)</span>
+                                </label>
+                                <button type="submit" id="btnSubmitAttachDisk" class="btn-primary" style="padding: 8px 16px;">
+                                    <i data-lucide="download-cloud" class="btn-icon-xs"></i>
+                                    <span>Gắn Đĩa Ngay (Hot Attach)</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

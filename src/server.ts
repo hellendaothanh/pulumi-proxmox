@@ -8,6 +8,8 @@ import * as fs from "fs";
 import { LocalWorkspace } from "@pulumi/pulumi/automation";
 import { createVmProgram, VmConfig } from "./pulumi-program";
 import { proxmoxClient } from "./proxmox-api";
+import { alertService } from "./alert-service";
+import { authService, AuthProviderType } from "./auth-service";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -97,8 +99,15 @@ function getAuthUser(req: express.Request) {
     const authHeader = req.headers["authorization"] || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.substring(7) : (req.headers["x-auth-token"] as string);
 
-    if (token && activeSessions.has(token)) {
-        return activeSessions.get(token)!;
+    if (token) {
+        // 1. Kiểm tra trong Centralized Auth Service (SSO / OIDC / Local)
+        const ssoUser = authService.getUserByToken(token);
+        if (ssoUser) return ssoUser;
+
+        // 2. Kiểm tra trong fallback activeSessions
+        if (activeSessions.has(token)) {
+            return activeSessions.get(token)!;
+        }
     }
 
     // Fallback qua custom header nếu chạy chế độ test
@@ -106,10 +115,12 @@ function getAuthUser(req: express.Request) {
     const userName = (req.headers["x-user-name"] as string);
     if (userRole && userName) {
         return {
+            id: `test_${userName}`,
             username: userName,
             role: userRole,
             displayName: userName === "admin" ? "Administrator" : (userName === "viewer" ? "Viewer" : "Developer"),
             avatar: userRole === "admin" ? "shield-check" : (userRole === "viewer" ? "eye" : "code-2"),
+            provider: "local" as any,
             loginTime: Date.now()
         };
     }
@@ -242,24 +253,150 @@ function broadcastLog(message: string) {
     }
 }
 
+// Khởi tạo Alerting Engine giám sát ngưỡng tài nguyên nền
+alertService.init(
+    (logMsg) => broadcastLog(logMsg),
+    (entry) => recordAuditLog(entry)
+);
+
 // ==========================================
-// AUTHENTICATION ROUTES
+// CENTRALIZED SSO & AUTHENTICATION ROUTES
 // ==========================================
 
-// 1. Đăng nhập người dùng (User Login)
+// 1. Lấy danh sách các Identity Providers (Google, GitHub, Keycloak, Local) đang bật
+app.get("/api/auth/providers", (req, res) => {
+    try {
+        const providers = authService.getEnabledProviders();
+        res.json({ success: true, data: providers });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 2. Khởi tạo luồng OAuth2 / OIDC Authorization Code Flow
+app.get("/api/auth/login/:provider", async (req, res) => {
+    const provider = req.params.provider as AuthProviderType;
+    const returnUrl = (req.query.returnUrl as string) || "/";
+
+    try {
+        const authUrl = await authService.generateLoginUrl(provider, returnUrl);
+        // Nếu là yêu cầu AJAX/fetch
+        if (req.headers.accept?.includes("application/json")) {
+            return res.json({ success: true, authUrl });
+        }
+        // Redirect trực tiếp nếu mở từ trình duyệt
+        res.redirect(authUrl);
+    } catch (error: any) {
+        res.status(400).json({ success: false, error: error.message });
+    }
+});
+
+// 3. Tiếp nhận OAuth2 / OIDC Callback & Trao đổi Token
+app.get("/api/auth/callback/:provider", async (req, res) => {
+    const provider = req.params.provider as AuthProviderType;
+    const code = req.query.code as string;
+    const state = req.query.state as string;
+    const error = req.query.error as string;
+    const errorDesc = req.query.error_description as string;
+
+    if (error) {
+        return res.redirect(`/?auth_error=${encodeURIComponent(errorDesc || error)}`);
+    }
+
+    if (!code || !state) {
+        return res.redirect(`/?auth_error=${encodeURIComponent("Thiếu mã ủy quyền (Code) hoặc State CSRF.")}`);
+    }
+
+    try {
+        const { token, user, returnUrl } = await authService.handleCallback(provider, code, state);
+
+        recordAuditLog({
+            username: user.username,
+            role: user.role,
+            action: "SSO_LOGIN",
+            target: `IdP: ${user.providerName || provider}`,
+            status: "SUCCESS",
+            details: `Đăng nhập thành công qua ${user.providerName} (${user.email || user.username}) với vai trò ${user.role.toUpperCase()}`,
+        });
+
+        broadcastLog(`🔑 [SSO LOGIN] Người dùng '${user.displayName}' (${user.email || user.username}) đã đăng nhập qua ${user.providerName} [${user.role.toUpperCase()}]`);
+
+        // Chuyển hướng người dùng về trang chủ kèm token
+        const cleanReturnUrl = returnUrl.startsWith("/") ? returnUrl : "/";
+        const redirectUrl = `${cleanReturnUrl}${cleanReturnUrl.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}&provider=${encodeURIComponent(provider)}`;
+        res.redirect(redirectUrl);
+    } catch (err: any) {
+        recordAuditLog({
+            username: "unknown",
+            role: "unknown",
+            action: "SSO_LOGIN_FAILED",
+            target: `IdP: ${provider}`,
+            status: "FAILED",
+            details: `Thất bại khi đăng nhập qua ${provider}: ${err.message}`,
+        });
+        res.redirect(`/?auth_error=${encodeURIComponent(err.message)}`);
+    }
+});
+
+// 4. Đăng nhập người dùng (Local Break-glass Login)
 app.post("/api/auth/login", (req, res) => {
     const rawUsername = String(req.body.username || "").trim();
     const rawPassword = String(req.body.password || "").trim();
-    const users = getUserAccounts();
 
-    const user = users[rawUsername];
-    const expectedPassword = user ? String(user.password || "").trim().replace(/^["']|["']$/g, "") : "";
-    const cleanRawPassword = rawPassword.replace(/^["']|["']$/g, "");
+    try {
+        // Thử xác thực qua authService
+        const result = authService.loginLocal(rawUsername, rawPassword);
+        recordAuditLog({
+            username: result.user.username,
+            role: result.user.role,
+            action: "USER_LOGIN",
+            target: "Portal Local",
+            status: "SUCCESS",
+            details: `Đăng nhập thành công qua tài khoản nội bộ: ${result.user.role.toUpperCase()}`
+        });
+        broadcastLog(`🔑 [LOCAL LOGIN] Tài khoản '${result.user.username}' (${result.user.role.toUpperCase()}) đăng nhập thành công.`);
+        return res.json({ success: true, data: result });
+    } catch (errAuth: any) {
+        // Fallback kiểm tra legacy users nếu có
+        const users = getUserAccounts();
+        const user = users[rawUsername];
+        const expectedPassword = user ? String(user.password || "").trim().replace(/^["']|["']$/g, "") : "";
+        const cleanRawPassword = rawPassword.replace(/^["']|["']$/g, "");
 
-    const isMatched = user && (expectedPassword === cleanRawPassword);
+        if (user && expectedPassword === cleanRawPassword) {
+            const token = `local_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+            activeSessions.set(token, {
+                username: user.username,
+                role: user.role,
+                displayName: user.displayName,
+                avatar: user.avatar,
+                loginTime: Date.now()
+            });
 
-    if (!isMatched) {
-        console.warn(`[AUTH FAILED] User: '${rawUsername}' | Expected: '${expectedPassword}' | Received: '${cleanRawPassword}'`);
+            recordAuditLog({
+                username: user.username,
+                role: user.role,
+                action: "USER_LOGIN",
+                target: "Portal Local",
+                status: "SUCCESS",
+                details: `Đăng nhập thành công với vai trò ${user.role.toUpperCase()}`
+            });
+
+            return res.json({
+                success: true,
+                data: {
+                    token,
+                    user: {
+                        username: user.username,
+                        role: user.role,
+                        displayName: user.displayName,
+                        avatar: user.avatar,
+                        provider: "local",
+                    }
+                }
+            });
+        }
+
         recordAuditLog({
             username: rawUsername || "unknown",
             role: "unknown",
@@ -268,61 +405,15 @@ app.post("/api/auth/login", (req, res) => {
             status: "FAILED",
             details: `Thất bại khi đăng nhập với tài khoản '${rawUsername}'. Sai tên đăng nhập hoặc mật khẩu.`
         });
-        return res.status(401).json({ 
-            success: false, 
-            error: `Tên đăng nhập hoặc mật khẩu không chính xác. (Mật khẩu tài khoản '${rawUsername}' đang được cấu hình trong .env)` 
+
+        return res.status(401).json({
+            success: false,
+            error: `Tên đăng nhập hoặc mật khẩu không chính xác.`
         });
     }
-
-    console.log(`[AUTH SUCCESS] User '${user.username}' (${user.role}) đăng nhập thành công!`);
-
-    // Tạo token session ngẫu nhiên
-    const token = `session_${user.username}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-    activeSessions.set(token, {
-        username: user.username,
-        role: user.role,
-        displayName: user.displayName,
-        avatar: user.avatar,
-        loginTime: Date.now()
-    });
-
-    recordAuditLog({
-        username: user.username,
-        role: user.role,
-        action: "USER_LOGIN",
-        target: "Portal UI",
-        status: "SUCCESS",
-        details: `Đăng nhập thành công với vai trò ${user.role.toUpperCase()} (${user.displayName})`
-    });
-
-    res.json({
-        success: true,
-        data: {
-            token,
-            user: {
-                username: user.username,
-                role: user.role,
-                displayName: user.displayName,
-                avatar: user.avatar
-            }
-        }
-    });
 });
 
-// Endpoint kiểm tra nhanh trạng thái tài khoản đang được nạp
-app.get("/api/auth/status", (req, res) => {
-    const users = getUserAccounts();
-    const safeUsers = Object.keys(users).map(k => ({
-        username: users[k].username,
-        role: users[k].role,
-        displayName: users[k].displayName,
-        passwordLength: users[k].password.length,
-        passwordPreview: users[k].password.substring(0, 2) + "***"
-    }));
-    res.json({ success: true, loadedAccounts: safeUsers });
-});
-
-// 2. Lấy thông tin user hiện tại qua Session Token
+// 5. Lấy thông tin user hiện tại qua Session Token
 app.get("/api/auth/me", (req, res) => {
     const authUser = getAuthUser(req);
     if (!authUser) {
@@ -332,22 +423,29 @@ app.get("/api/auth/me", (req, res) => {
     res.json({
         success: true,
         data: {
+            id: (authUser as any).id,
             username: authUser.username,
+            email: (authUser as any).email,
             role: authUser.role,
             displayName: authUser.displayName,
-            avatar: authUser.avatar
+            avatar: authUser.avatar,
+            provider: (authUser as any).provider || "local",
+            providerName: (authUser as any).providerName,
+            groups: (authUser as any).groups || [],
         }
     });
 });
 
-// 3. Đăng xuất (Logout)
+// 6. Đăng xuất (Logout)
 app.post("/api/auth/logout", (req, res) => {
     const authHeader = req.headers["authorization"] || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.substring(7) : (req.headers["x-auth-token"] as string);
 
-    if (token && activeSessions.has(token)) {
-        const user = activeSessions.get(token);
+    if (token) {
+        const user = authService.getUserByToken(token) || activeSessions.get(token);
+        authService.invalidateSession(token);
         activeSessions.delete(token);
+
         if (user) {
             recordAuditLog({
                 username: user.username,
@@ -363,7 +461,7 @@ app.post("/api/auth/logout", (req, res) => {
     res.json({ success: true, message: "Đăng xuất thành công." });
 });
 
-// 4. Đổi mật khẩu phiên hiện tại (Runtime Password Change & Persist to .env)
+// 7. Đổi mật khẩu phiên hiện tại (Runtime Password Change & Persist to .env)
 app.post("/api/auth/change-password", (req, res) => {
     const authUser = getAuthUser(req);
     if (!authUser) {
@@ -450,10 +548,88 @@ app.get("/api/logs/stream", (req, res) => {
 app.get("/api/resources", async (req, res) => {
     try {
         const clusterData = await proxmoxClient.getClusterOverview();
+        // Kích hoạt đánh giá cảnh báo ngưỡng nền nhẹ nhàng khi người dùng xem tài nguyên
+        alertService.checkClusterMetrics().catch(() => {});
         res.json({ success: true, data: clusterData });
     } catch (error: any) {
         res.status(500).json({ success: false, error: error.message });
     }
+});
+
+// ==========================================
+// CLUSTER RESOURCE ALERTING APIS
+// ==========================================
+
+// 1. Lấy thông tin cảnh báo, ngưỡng và lịch sử cảnh báo
+app.get("/api/alerts", (req, res) => {
+    const status = alertService.getStatus();
+    res.json({ success: true, data: status });
+});
+
+// 2. Cập nhật cấu hình ngưỡng và các kênh thông báo (Telegram / Webhook)
+app.post("/api/alerts/config", (req, res) => {
+    const authUser = getAuthUser(req);
+    if (!authUser || authUser.role !== "admin") {
+        return res.status(403).json({ success: false, error: "[RBAC DENIED] Chỉ Admin mới có quyền cập nhật cấu hình Cảnh Báo Ngưỡng!" });
+    }
+
+    try {
+        const updated = alertService.updateConfig(req.body);
+        recordAuditLog({
+            username: authUser.username,
+            role: authUser.role,
+            action: "UPDATE_ALERT_CONFIG",
+            target: `Alert Thresholds (Storage: ${updated.storagePercent}%, CPU: ${updated.cpuPercent}%, RAM: ${updated.ramPercent}%)`,
+            status: "SUCCESS",
+            details: `Cập nhật cấu hình cảnh báo tài nguyên cụm Proxmox`,
+        });
+        broadcastLog(`⚙️ [Alert Engine] [User: ${authUser.username}] Đã cập nhật ngưỡng cảnh báo (Storage: ${updated.storagePercent}%, CPU: ${updated.cpuPercent}%, RAM: ${updated.ramPercent}%)`);
+        res.json({ success: true, message: "Đã cập nhật cấu hình cảnh báo thành công!", data: updated });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 3. Gửi thông báo thử nghiệm (Test Alert) tới Telegram / Webhook
+app.post("/api/alerts/test", async (req, res) => {
+    const authUser = getAuthUser(req);
+    if (!authUser || authUser.role === "viewer") {
+        return res.status(403).json({ success: false, error: "[RBAC DENIED] Tài khoản Viewer không có quyền gửi thông báo thử nghiệm." });
+    }
+
+    try {
+        const result = await alertService.sendTestAlert();
+        recordAuditLog({
+            username: authUser.username,
+            role: authUser.role,
+            action: "SEND_TEST_ALERT",
+            target: "Telegram & Webhook Notification Channels",
+            status: (result.telegramSuccess || result.webhookSuccess) ? "SUCCESS" : "FAILED",
+            details: result.details,
+        });
+        res.json({ success: true, message: "Đã gửi thông báo thử nghiệm!", data: result });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 4. Kích hoạt quét tức thời toàn bộ tài nguyên cụm
+app.post("/api/alerts/check", async (req, res) => {
+    try {
+        const triggered = await alertService.checkClusterMetrics();
+        const status = alertService.getStatus();
+        res.json({ success: true, message: `Đã quét xong cụm. Phát hiện ${status.activeCount} cảnh báo hoạt động.`, data: status });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 5. Tạm ẩn / Đánh dấu đã xem cảnh báo
+app.post("/api/alerts/dismiss", (req, res) => {
+    const { id } = req.body;
+    if (!id) return res.status(400).json({ success: false, error: "Thiếu alert id." });
+    const success = alertService.dismissAlert(id);
+    res.json({ success, message: success ? "Đã tắt cảnh báo." : "Không tìm thấy cảnh báo." });
 });
 
 // Endpoint lấy danh sách Stacks / VMs
@@ -1286,6 +1462,329 @@ app.get("/api/nodes/:node/vms/:vmid/console", async (req, res) => {
                 authTicket: authTicket ? { ticket: authTicket.ticket, CSRFPreventionToken: authTicket.CSRFPreventionToken } : null
             }
         });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 7. Lấy danh sách Firewall Rules & Options của VM
+app.get("/api/nodes/:node/vms/:vmid/firewall", async (req, res) => {
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: "[AUTH REQUIRED] Vui lòng đăng nhập." });
+    }
+    const { node, vmid } = req.params;
+    try {
+        const [rules, options] = await Promise.all([
+            proxmoxClient.getVmFirewallRules(node, vmid),
+            proxmoxClient.getVmFirewallOptions(node, vmid),
+        ]);
+        res.json({
+            success: true,
+            data: {
+                rules: rules || [],
+                options: options || { enable: 1, policy_in: "DROP", policy_out: "ACCEPT" },
+            },
+        });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 8. Cập nhật Firewall Options (Bật/Tắt Firewall VM, Đổi Policy)
+app.put("/api/nodes/:node/vms/:vmid/firewall/options", async (req, res) => {
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: "[AUTH REQUIRED] Vui lòng đăng nhập." });
+    }
+    const { node, vmid } = req.params;
+    const permCheck = await checkVmPermission(node, vmid, authUser);
+    if (!permCheck.allowed) {
+        return res.status(403).json({ success: false, error: `[RBAC DENIED] ${permCheck.reason}` });
+    }
+
+    try {
+        const result = await proxmoxClient.setVmFirewallOptions(node, vmid, req.body);
+        recordAuditLog({
+            username: authUser.username,
+            role: authUser.role,
+            action: "UPDATE_FIREWALL_OPTIONS",
+            target: `VM #${vmid} (@${node})`,
+            status: "SUCCESS",
+            details: `Cập nhật cấu hình Firewall tổng thể cho VM #${vmid}`,
+        });
+        res.json({ success: true, message: "Đã cập nhật tùy chọn Firewall thành công!", data: result });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 9. Thêm Firewall Rule mới (Mở port / Chặn IP)
+app.post("/api/nodes/:node/vms/:vmid/firewall/rules", async (req, res) => {
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: "[AUTH REQUIRED] Vui lòng đăng nhập." });
+    }
+    const { node, vmid } = req.params;
+    const permCheck = await checkVmPermission(node, vmid, authUser);
+    if (!permCheck.allowed) {
+        return res.status(403).json({ success: false, error: `[RBAC DENIED] ${permCheck.reason}` });
+    }
+
+    const { action, type, proto, dport, sport, source, dest, comment, enable } = req.body;
+
+    try {
+        const result = await proxmoxClient.addVmFirewallRule(node, vmid, {
+            action: action || "ACCEPT",
+            type: type || "in",
+            proto: proto || "tcp",
+            dport,
+            sport,
+            source,
+            dest,
+            comment,
+            enable: enable !== undefined ? enable : 1,
+        });
+
+        recordAuditLog({
+            username: authUser.username,
+            role: authUser.role,
+            action: "ADD_FIREWALL_RULE",
+            target: `VM #${vmid} (@${node})`,
+            status: "SUCCESS",
+            details: `Thêm Rule Firewall: [${action || 'ACCEPT'} ${type || 'IN'} ${proto || 'TCP'} Port:${dport || 'ANY'}] - ${comment || ''}`,
+        });
+
+        broadcastLog(`🛡️ [FIREWALL] [User: ${authUser.username}] Đã thêm Rule Firewall cho VM #${vmid}: ${action || 'ACCEPT'} ${proto || 'TCP'} port ${dport || 'ANY'}`);
+        res.json({ success: true, message: "Đã thêm Firewall Rule thành công!", data: result });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 10. Chỉnh sửa hoặc Toggle Bật/Tắt Firewall Rule
+app.put("/api/nodes/:node/vms/:vmid/firewall/rules/:pos", async (req, res) => {
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: "[AUTH REQUIRED] Vui lòng đăng nhập." });
+    }
+    const { node, vmid, pos } = req.params;
+    const permCheck = await checkVmPermission(node, vmid, authUser);
+    if (!permCheck.allowed) {
+        return res.status(403).json({ success: false, error: `[RBAC DENIED] ${permCheck.reason}` });
+    }
+
+    try {
+        const result = await proxmoxClient.updateVmFirewallRule(node, vmid, Number(pos), req.body);
+        recordAuditLog({
+            username: authUser.username,
+            role: authUser.role,
+            action: "UPDATE_FIREWALL_RULE",
+            target: `VM #${vmid} (@${node})`,
+            status: "SUCCESS",
+            details: `Cập nhật Firewall Rule #${pos} cho VM #${vmid}`,
+        });
+        res.json({ success: true, message: "Đã cập nhật Firewall Rule thành công!", data: result });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 11. Xóa Firewall Rule
+app.delete("/api/nodes/:node/vms/:vmid/firewall/rules/:pos", async (req, res) => {
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: "[AUTH REQUIRED] Vui lòng đăng nhập." });
+    }
+    const { node, vmid, pos } = req.params;
+    const permCheck = await checkVmPermission(node, vmid, authUser);
+    if (!permCheck.allowed) {
+        return res.status(403).json({ success: false, error: `[RBAC DENIED] ${permCheck.reason}` });
+    }
+
+    try {
+        const result = await proxmoxClient.deleteVmFirewallRule(node, vmid, Number(pos));
+        recordAuditLog({
+            username: authUser.username,
+            role: authUser.role,
+            action: "DELETE_FIREWALL_RULE",
+            target: `VM #${vmid} (@${node})`,
+            status: "SUCCESS",
+            details: `Xóa Firewall Rule #${pos} của VM #${vmid}`,
+        });
+        broadcastLog(`🛡️ [FIREWALL] [User: ${authUser.username}] Đã xóa Firewall Rule #${pos} của VM #${vmid}`);
+        res.json({ success: true, message: "Đã xóa Firewall Rule thành công!", data: result });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ==========================================
+// HARDWARE HOTPLUG & MULTI-DISK APIS
+// ==========================================
+
+// 1. Lấy chi tiết phần cứng & danh sách ổ đĩa VM
+app.get("/api/nodes/:node/vms/:vmid/hardware", async (req, res) => {
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: "[AUTH REQUIRED] Vui lòng đăng nhập." });
+    }
+    const { node, vmid } = req.params;
+    try {
+        const hardware = await proxmoxClient.getVmHardwareDetails(node, vmid);
+        res.json({ success: true, data: hardware });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 2. Thay đổi Cấu hình Nóng CPU / RAM (Hotplug CPU & Memory)
+app.put("/api/nodes/:node/vms/:vmid/hardware/hotplug", async (req, res) => {
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: "[AUTH REQUIRED] Vui lòng đăng nhập." });
+    }
+    const { node, vmid } = req.params;
+    const permCheck = await checkVmPermission(node, vmid, authUser);
+    if (!permCheck.allowed) {
+        return res.status(403).json({ success: false, error: `[RBAC DENIED] ${permCheck.reason}` });
+    }
+
+    const { cores, memoryMb } = req.body;
+    if (cores === undefined && memoryMb === undefined) {
+        return res.status(400).json({ success: false, error: "Vui lòng cung cấp cores hoặc memoryMb cần điều chỉnh." });
+    }
+
+    // Kiểm tra Quota nếu là developer
+    if (authUser.role === "developer") {
+        const userQuota = ROLE_QUOTAS.developer;
+        if (cores && cores > userQuota.maxCores) {
+            return res.status(403).json({ success: false, error: `[QUOTA DENIED] Số vCPU vượt quá hạn mức Developer (${userQuota.maxCores} vCPU).` });
+        }
+        if (memoryMb && memoryMb > userQuota.maxMemoryMb) {
+            return res.status(403).json({ success: false, error: `[QUOTA DENIED] RAM vượt quá hạn mức Developer (${userQuota.maxMemoryMb} MB).` });
+        }
+    }
+
+    try {
+        const result = await proxmoxClient.updateVmHardware(node, vmid, { cores, memoryMb });
+        recordAuditLog({
+            username: authUser.username,
+            role: authUser.role,
+            action: "HOTPLUG_HARDWARE",
+            target: `VM #${vmid} (@${node})`,
+            status: "SUCCESS",
+            details: `Thay đổi cấu hình nóng: ${cores ? `${cores} vCPU ` : ''}${memoryMb ? `${memoryMb} MB RAM` : ''}`,
+        });
+        broadcastLog(`⚡ [HOTPLUG] [User: ${authUser.username}] Đã điều chỉnh nóng phần cứng VM #${vmid}: ${cores ? `${cores} vCPU, ` : ''}${memoryMb ? `${memoryMb} MB RAM` : ''}`);
+        res.json({ success: true, message: "Đã cập nhật cấu hình phần cứng thành công!", data: result });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 3. Mở rộng dung lượng đĩa trực tuyến (Online Disk Resize)
+app.post("/api/nodes/:node/vms/:vmid/disks/resize", async (req, res) => {
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: "[AUTH REQUIRED] Vui lòng đăng nhập." });
+    }
+    const { node, vmid } = req.params;
+    const permCheck = await checkVmPermission(node, vmid, authUser);
+    if (!permCheck.allowed) {
+        return res.status(403).json({ success: false, error: `[RBAC DENIED] ${permCheck.reason}` });
+    }
+
+    const { diskSlot, size } = req.body;
+    if (!diskSlot || !size) {
+        return res.status(400).json({ success: false, error: "Vui lòng cung cấp diskSlot (vd: scsi0) và size (vd: +10G)." });
+    }
+
+    try {
+        const result = await proxmoxClient.resizeVmDisk(node, vmid, diskSlot, size);
+        recordAuditLog({
+            username: authUser.username,
+            role: authUser.role,
+            action: "RESIZE_DISK",
+            target: `VM #${vmid} (@${node}) [${diskSlot}]`,
+            status: "SUCCESS",
+            details: `Mở rộng đĩa ${diskSlot} thêm ${size}`,
+        });
+        broadcastLog(`💾 [DISK RESIZE] [User: ${authUser.username}] Đã mở rộng đĩa ${diskSlot} của VM #${vmid} (Size: ${size})`);
+        res.json({ success: true, message: `Đã mở rộng đĩa ${diskSlot} thành công!`, data: result });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 4. Gắn thêm Đĩa phụ mới (Hot-attach Secondary Virtual Disk)
+app.post("/api/nodes/:node/vms/:vmid/disks/attach", async (req, res) => {
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: "[AUTH REQUIRED] Vui lòng đăng nhập." });
+    }
+    const { node, vmid } = req.params;
+    const permCheck = await checkVmPermission(node, vmid, authUser);
+    if (!permCheck.allowed) {
+        return res.status(403).json({ success: false, error: `[RBAC DENIED] ${permCheck.reason}` });
+    }
+
+    const { storage, sizeGb, slot, discard, cache } = req.body;
+    if (!storage || !sizeGb) {
+        return res.status(400).json({ success: false, error: "Vui lòng cung cấp storage pool và dung lượng đĩa sizeGb." });
+    }
+
+    try {
+        const result = await proxmoxClient.attachSecondaryDisk(node, vmid, {
+            storage,
+            sizeGb: Number(sizeGb),
+            slot: slot || "scsi1",
+            discard: discard !== false,
+            cache: cache || "none",
+        });
+        recordAuditLog({
+            username: authUser.username,
+            role: authUser.role,
+            action: "ATTACH_SECONDARY_DISK",
+            target: `VM #${vmid} (@${node}) [${slot || 'scsi1'}]`,
+            status: "SUCCESS",
+            details: `Gắn đĩa phụ ${slot || 'scsi1'} (${sizeGb} GB) tại Storage Pool '${storage}'`,
+        });
+        broadcastLog(`💾 [MULTI-DISK] [User: ${authUser.username}] Đã gắn thêm đĩa phụ ${slot || 'scsi1'} (${sizeGb} GB trên ${storage}) cho VM #${vmid}`);
+        res.json({ success: true, message: `Đã gắn đĩa phụ ${slot || 'scsi1'} (${sizeGb} GB) thành công!`, data: result });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 5. Gỡ bỏ Đĩa phụ (Detach Secondary Disk)
+app.delete("/api/nodes/:node/vms/:vmid/disks/:slot", async (req, res) => {
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: "[AUTH REQUIRED] Vui lòng đăng nhập." });
+    }
+    const { node, vmid, slot } = req.params;
+    const permCheck = await checkVmPermission(node, vmid, authUser);
+    if (!permCheck.allowed) {
+        return res.status(403).json({ success: false, error: `[RBAC DENIED] ${permCheck.reason}` });
+    }
+
+    if (slot === "scsi0" || slot === "bootdisk") {
+        return res.status(400).json({ success: false, error: "Không thể gỡ ổ đĩa hệ điều hành chính (scsi0)!" });
+    }
+
+    try {
+        const result = await proxmoxClient.detachVmDisk(node, vmid, slot);
+        recordAuditLog({
+            username: authUser.username,
+            role: authUser.role,
+            action: "DETACH_DISK",
+            target: `VM #${vmid} (@${node}) [${slot}]`,
+            status: "SUCCESS",
+            details: `Gỡ ổ đĩa phụ ${slot} của VM #${vmid}`,
+        });
+        broadcastLog(`💾 [MULTI-DISK] [User: ${authUser.username}] Đã gỡ bỏ đĩa phụ ${slot} của VM #${vmid}`);
+        res.json({ success: true, message: `Đã gỡ bỏ đĩa ${slot} thành công!`, data: result });
     } catch (error: any) {
         res.status(500).json({ success: false, error: error.message });
     }
