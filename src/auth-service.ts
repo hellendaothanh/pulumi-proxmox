@@ -163,52 +163,48 @@ class AuthService {
     // ==========================================
     // PROVIDER LIST & DISCOVERY
     // ==========================================
-    public getEnabledProviders(): AuthProviderInfo[] {
-        const providers: AuthProviderInfo[] = [];
+    public getEnabledProviders(): Array<AuthProviderInfo & { configured: boolean }> {
+        const providers: Array<AuthProviderInfo & { configured: boolean }> = [];
 
-        if (this.config.googleEnabled && this.config.googleClientId) {
-            providers.push({
-                id: "google",
-                name: "Google Workspace",
-                enabled: true,
-                icon: "google",
-                description: "Đăng nhập bằng tài khoản Google Workspace công ty",
-                loginUrl: "/api/auth/login/google"
-            });
-        }
+        providers.push({
+            id: "google",
+            name: "Google Workspace",
+            enabled: true,
+            configured: !!(this.config.googleClientId && this.config.googleClientSecret),
+            icon: "google",
+            description: "Đăng nhập bằng tài khoản Google Workspace công ty",
+            loginUrl: "/api/auth/login/google"
+        });
 
-        if (this.config.githubEnabled && this.config.githubClientId) {
-            providers.push({
-                id: "github",
-                name: "GitHub Enterprise / SSO",
-                enabled: true,
-                icon: "github",
-                description: "Đăng nhập bằng tài khoản GitHub qua Tổ chức (Organization)",
-                loginUrl: "/api/auth/login/github"
-            });
-        }
+        providers.push({
+            id: "github",
+            name: "GitHub Enterprise / SSO",
+            enabled: true,
+            configured: !!(this.config.githubClientId && this.config.githubClientSecret),
+            icon: "github",
+            description: "Đăng nhập bằng tài khoản GitHub qua Tổ chức (Organization)",
+            loginUrl: "/api/auth/login/github"
+        });
 
-        if (this.config.oidcEnabled && this.config.oidcIssuerUrl && this.config.oidcClientId) {
-            providers.push({
-                id: "oidc",
-                name: this.config.oidcName || "Keycloak / OIDC",
-                enabled: true,
-                icon: "keycloak",
-                description: "Xác thực tập trung qua OpenID Connect (Keycloak, Authelia, Okta)",
-                loginUrl: "/api/auth/login/oidc"
-            });
-        }
+        providers.push({
+            id: "oidc",
+            name: this.config.oidcName || "Keycloak / Authelia OIDC",
+            enabled: true,
+            configured: !!(this.config.oidcIssuerUrl && this.config.oidcClientId),
+            icon: "keycloak",
+            description: "Xác thực tập trung qua OpenID Connect (Keycloak, Authelia, Okta)",
+            loginUrl: "/api/auth/login/oidc"
+        });
 
         // Local Break-Glass
-        if (this.config.localEnabled) {
-            providers.push({
-                id: "local",
-                name: "Tài Khoản Nội Bộ (Break-glass)",
-                enabled: true,
-                icon: "shield",
-                description: "Đăng nhập trực tiếp bằng tài khoản quản trị cục bộ"
-            });
-        }
+        providers.push({
+            id: "local",
+            name: "Tài Khoản Nội Bộ (Break-glass)",
+            enabled: true,
+            configured: true,
+            icon: "shield",
+            description: "Đăng nhập trực tiếp bằng tài khoản quản trị cục bộ"
+        });
 
         return providers;
     }
