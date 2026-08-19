@@ -10,16 +10,29 @@ An enterprise-ready, self-service infrastructure portal and automation platform 
 
 ## 🌟 Key Features
 
-### 1. 🛡️ Resource Governance & Multi-Tenancy (RBAC & Audit Logs)
-* **Role-Based Access Control (RBAC)**:
-  * **👑 Administrator**: Full administrative authority; allowed to provision, configure, alter, and destroy VMs and snapshots across all environments (`DEV`, `STAGING`, `PROD`).
-  * **👨‍💻 Developer**: Strictly constrained by environment isolation policies — **can only provision and destroy resources in the `DEV` environment**; creation and deletion requests on `STAGING` and `PROD` are automatically denied by the backend policy engine.
-  * **Role Switcher**: Quick role toggling directly from the top navigation bar for testing, auditing, and role segregation.
+### 1. 🛡️ User Authentication & RBAC Governance
+* **Independent Account Authentication & Session Tokens**:
+  * Secure sign-in via dedicated Login screen with token sessions.
+  * **Runtime Password Change**: Change passwords directly from the UI (persisted to `.env`), with flexible environment-based user management.
+* **3-Tier Role-Based Access Control (RBAC)**:
+  * **👑 Administrator (`admin`)**: Full authority; create, reconfigure, control power, snapshot, and delete VMs across all environments (`DEV`, `STAGING`, `PROD`).
+  * **👨‍💻 Developer (`developer`)**: Strictly bound by environment isolation — **can only deploy, manage power, and take snapshots in the `DEV` environment**; actions on `STAGING` and `PROD` are dynamically hidden or disabled.
+  * **👁️ Viewer (`viewer`)**: **Read-only** mode; view cluster health, VM lists, Live Web Console, and Audit Logs with VM creation, power toggling, snapshot, and deletion controls fully restricted.
 * **Audit Logging & Compliance Traceability**:
   * Records detailed transaction trails: **Timestamp**, **Username & Role**, **Action**, **Target VM/Stack**, **Environment**, **Status (SUCCESS / DENIED)**, and **Failure/Denial reasons**.
   * Dedicated **Audit Logs** tab providing full visibility into operational history and compliance auditing.
 
-### 2. 📊 Cluster Resource Overview & Smart Navigation
+### 2. 🧙‍♂️ Multi-Step VM Creation Wizard
+* **Guided 4-Step Provisioning Flow**:
+  * **Step 1 (Target & Naming)**: VM Name, Environment badge (`DEV`, `STAGING`, `PROD`), VM Batch Count (1-10 VMs), and Target Node selection / Round-Robin mode.
+  * **Step 2 (Hardware Specs)**: Customize vCPU Cores, RAM (MB/GB), Target Storage Pool (`zfs-storage`, `local-lvm`, etc.), and Disk capacity (GB).
+  * **Step 3 (OS Template & Networking)**: Select Cloud Image/OS Template, configure Static IP/CIDR or DHCP, Gateway, and assign Custom Tags.
+  * **Step 4 (Cloud-Init & Bootstrap)**: Inject custom user-data/bootstrap scripts, apply 1-click Presets (Docker, Nginx, Hardening), and paste SSH Public Keys.
+* **Real-time Form Validation & Live Summary**:
+  * Disables forward progression until required inputs are valid.
+  * Live specification review card before triggering the deployment.
+
+### 3. 📊 Cluster Resource Overview & Smart Navigation
 * **Sticky Node Quick Navigation Bar**:
   * Pinned navigation bar that remains visible when scrolling, showing real-time cluster health, VM tally (`running/total`), and storage engines per node.
   * **1-Click Jump**: Smoothly scrolls directly to the targeted node and triggers a temporary Purple Glow Highlight effect.
@@ -27,14 +40,15 @@ An enterprise-ready, self-service infrastructure portal and automation platform 
 * **Instant Search**:
   * Real-time fuzzy filtering across VM Names, VM IDs, IP addresses, Node Names, Environments, and custom Tags.
 * **Real-time Node Telemetry**: Node Online/Offline status, % CPU load, RAM usage/available, Uptime, and Node IP addresses (with **1-Click Copy IP**).
-* **Storage Pools Inspector**: Deep inspection of Storage Pools (`ZFS`, `zfs-storage`, `local-lvm`, `Directory`), listing available ISOs, Cloud-Init Images, and VM Disks.
+* **Storage Pools & Resource Management Tabs**:
+  * Dedicated Resource Tabs: Deep inspection of Storage Pools (`ZFS`, `zfs-storage`, `local-lvm`, `Directory`), listing available ISOs, Cloud-Init Images, and VM Disks.
 * **Redesigned Clean VM Table**:
   * Intelligently combines VM Name, ID, and Tags in a single structured column.
   * Displays complete hardware specs via Spec Pills: `<cpu> vCPU`, `<layers> RAM`, and `<hard-drive> Disk Size`.
   * **2-Column IP Grid Matrix**: Automatically restricts multi-IP displays to a clean 2-column layout to prevent table overflow and maintain visual balance.
   * **Back to Top Floating Button**: Smart floating button that triggers smooth scrolling back to the top of the dashboard.
 
-### 3. ⚡ VM Lifecycle Management & Fast Operations
+### 4. ⚡ VM Lifecycle Management & Fast Operations
 * **Direct Power Controls (1-Click Actions)**:
   * Control VM power states directly from the overview table: **Start**, **ACPI Shutdown** (Safe shutdown), **Force Stop** (Hard power off), **Reboot** (Graceful restart), and **Force Reset**.
   * Auto-detects runtime status to present dynamic context buttons with safety confirmation prompts before abrupt power cuts.
@@ -47,7 +61,7 @@ An enterprise-ready, self-service infrastructure portal and automation platform 
   * **Rollback Snapshots**: Instant revert to any point-in-time snapshot with a single click (ideal before patching OS or performing risky config updates).
   * **Delete Snapshots**: Easily clean up and prune outdated snapshots.
 
-### 4. 🤖 Post-provisioning Automation & IaC Hooks (Cloud-Init Bootstrap)
+### 5. 🤖 Post-provisioning Automation & IaC Hooks (Cloud-Init Bootstrap)
 * **Automated Post-boot Bootstrap (Custom User-Data)**:
   * Injects Cloud-Init `user-data` YAML or Shell bootstrap scripts (`#!/bin/bash`) directly into VM creation.
   * Automatically creates managed Snippet files on Proxmox VE and mounts them to the VM initialization layer.
@@ -58,7 +72,7 @@ An enterprise-ready, self-service infrastructure portal and automation platform 
 * **SSH Public Key Injection**:
   * Seamlessly passes root SSH public keys for passwordless authentication immediately after first boot.
 
-### 5. 🏗️ Single & Multi-Node Batch VM Provisioning
+### 6. 🏗️ Single & Multi-Node Batch VM Provisioning
 * **Deploy 1 to 10 VMs in Batches**:
   * Auto-sequential VM naming (e.g., `postgresql` ➔ `postgresql01`, `postgresql02`, `postgresql03`...).
   * Smart **Round-Robin** workload distribution across all selected target nodes.
@@ -72,7 +86,7 @@ An enterprise-ready, self-service infrastructure portal and automation platform 
   * Environment LED status badges: **DEV** (Green), **STAGING** (Amber), **PROD** (Red).
   * Custom categorization tags (`#database`, `#backend`, `#k8s`...).
 
-### 6. 🛠️ Self-Service Pulumi Stack Management & Live Terminal Logs
+### 7. 🛠️ Self-Service Pulumi Stack Management & Live Terminal Logs
 * Inventory of all active Pulumi Stacks provisioned through the portal.
 * **1-Click Copy IP**: Instant VM IP copy for fast SSH and service connectivity.
 * **Live Streaming Console (SSE)**:

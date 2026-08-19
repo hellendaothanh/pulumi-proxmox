@@ -29,40 +29,301 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     // ==========================================
-    // RBAC ROLE MANAGEMENT & TAB SWITCHING
+    // USER AUTHENTICATION & RBAC STATE
     // ==========================================
-    const userRoleSelect = document.getElementById("userRoleSelect");
-    let currentUserRole = localStorage.getItem("pulumi_user_role") || "admin";
+    let currentAuthToken = localStorage.getItem("pulumi_auth_token") || "";
+    let currentAuthUser = null;
 
-    if (userRoleSelect) {
-        userRoleSelect.value = currentUserRole;
-        userRoleSelect.addEventListener("change", (e) => {
-            currentUserRole = e.target.value;
-            localStorage.setItem("pulumi_user_role", currentUserRole);
-            showToast(`Đã chuyển vai trò: ${currentUserRole === 'admin' ? '👑 Administrator' : '👨‍💻 Developer'}`);
-            applyRbacUiRestrictions();
-            loadAuditLogs();
+    const loginModal = document.getElementById("loginModal");
+    const loginForm = document.getElementById("loginForm");
+    const loginUsername = document.getElementById("loginUsername");
+    const loginPassword = document.getElementById("loginPassword");
+    const loginErrorMsg = document.getElementById("loginErrorMsg");
+    const loginErrorText = document.getElementById("loginErrorText");
+    const btnSubmitLogin = document.getElementById("btnSubmitLogin");
+
+    const userProfileBadge = document.getElementById("userProfileBadge");
+    const userAvatar = document.getElementById("userAvatar");
+    const userDisplayName = document.getElementById("userDisplayName");
+    const userRoleBadge = document.getElementById("userRoleBadge");
+    const btnLogout = document.getElementById("btnLogout");
+
+    // Quick Fill Form Demo User
+    window.fillLoginForm = (username) => {
+        if (loginUsername) loginUsername.value = username;
+        if (loginPassword) {
+            loginPassword.value = "";
+            loginPassword.focus();
+        }
+        if (loginErrorMsg) loginErrorMsg.classList.add("hidden");
+
+        document.querySelectorAll(".btn-demo-user").forEach(btn => {
+            if (btn.querySelector("strong")?.textContent === username) {
+                btn.classList.add("active");
+            } else {
+                btn.classList.remove("active");
+            }
+        });
+    };
+
+    // Toggle hiển thị / ẩn mật khẩu khi đăng nhập
+    const btnToggleLoginPass = document.getElementById("btnToggleLoginPass");
+    if (btnToggleLoginPass && loginPassword) {
+        btnToggleLoginPass.addEventListener("click", () => {
+            const isPassword = loginPassword.type === "password";
+            loginPassword.type = isPassword ? "text" : "password";
+            btnToggleLoginPass.innerHTML = isPassword 
+                ? `<i data-lucide="eye-off" style="width:16px;height:16px;color:#818cf8;"></i>` 
+                : `<i data-lucide="eye" style="width:16px;height:16px;"></i>`;
+            if (window.lucide) window.lucide.createIcons();
         });
     }
 
-    function applyRbacUiRestrictions() {
-        const envRadios = document.querySelectorAll("input[name='environment']");
-        const isDevOnly = currentUserRole === "developer";
+    // Hàm lấy headers xác thực đính kèm mọi request
+    window.getAuthHeaders = () => {
+        const headers = { "Content-Type": "application/json" };
+        if (currentAuthToken) {
+            headers["Authorization"] = `Bearer ${currentAuthToken}`;
+        }
+        if (currentAuthUser) {
+            headers["x-user-name"] = currentAuthUser.username;
+            headers["x-user-role"] = currentAuthUser.role;
+        }
+        return headers;
+    };
 
+    // Kiểm tra trạng thái đăng nhập khi load trang
+    async function checkAuthSession() {
+        if (!currentAuthToken) {
+            showLoginModal();
+            return;
+        }
+
+        try {
+            const res = await fetch("/api/auth/me", {
+                headers: { "Authorization": `Bearer ${currentAuthToken}` }
+            });
+            if (!res.ok) {
+                localStorage.removeItem("pulumi_auth_token");
+                currentAuthToken = "";
+                currentAuthUser = null;
+                showLoginModal();
+                return;
+            }
+            const data = await res.json();
+            if (data.success && data.data) {
+                currentAuthUser = data.data;
+                hideLoginModal();
+                updateUserInterfaceProfile();
+                applyRbacUiRestrictions();
+                loadAuditLogs();
+            } else {
+                localStorage.removeItem("pulumi_auth_token");
+                currentAuthToken = "";
+                currentAuthUser = null;
+                showLoginModal();
+            }
+        } catch {
+            showLoginModal();
+        }
+    }
+
+    function showLoginModal() {
+        if (loginModal) {
+            loginModal.classList.remove("hidden");
+            if (window.lucide) window.lucide.createIcons();
+        }
+    }
+
+    function hideLoginModal() {
+        if (loginModal) loginModal.classList.add("hidden");
+    }
+
+    function updateUserInterfaceProfile() {
+        if (!currentAuthUser) return;
+        const iconName = currentAuthUser.avatar || (currentAuthUser.role === 'admin' ? 'shield-check' : (currentAuthUser.role === 'viewer' ? 'eye' : 'code-2'));
+        if (userAvatar) {
+            userAvatar.innerHTML = `<i data-lucide="${iconName}" class="user-svg-icon"></i>`;
+        }
+        if (userDisplayName) userDisplayName.textContent = currentAuthUser.displayName || currentAuthUser.username;
+        if (userRoleBadge) {
+            userRoleBadge.textContent = currentAuthUser.role.toUpperCase();
+            userRoleBadge.className = `user-role-badge role-${currentAuthUser.role.toLowerCase()}`;
+        }
+        if (window.lucide) window.lucide.createIcons();
+    }
+
+    // Xử lý submit Login Form
+    if (loginForm) {
+        loginForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const username = (loginUsername.value || "").trim();
+            const password = (loginPassword.value || "").trim();
+
+            btnSubmitLogin.disabled = true;
+            btnSubmitLogin.querySelector(".spinner")?.classList.remove("hidden");
+            loginErrorMsg?.classList.add("hidden");
+
+            try {
+                const res = await fetch("/api/auth/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await res.json();
+                if (data.success && data.data) {
+                    currentAuthToken = data.data.token;
+                    currentAuthUser = data.data.user;
+                    localStorage.setItem("pulumi_auth_token", currentAuthToken);
+
+                    hideLoginModal();
+                    updateUserInterfaceProfile();
+                    applyRbacUiRestrictions();
+                    showToast(`Chào mừng ${currentAuthUser.displayName} (${currentAuthUser.role.toUpperCase()}) đăng nhập thành công!`);
+
+                    loadClusterResources();
+                    loadAuditLogs();
+                } else {
+                    loginErrorText.textContent = data.error || "Tên đăng nhập hoặc mật khẩu không chính xác.";
+                    loginErrorMsg?.classList.remove("hidden");
+                }
+            } catch (err) {
+                loginErrorText.textContent = `Lỗi kết nối tới Server: ${err.message}`;
+                loginErrorMsg?.classList.remove("hidden");
+            } finally {
+                btnSubmitLogin.disabled = false;
+                btnSubmitLogin.querySelector(".spinner")?.classList.add("hidden");
+            }
+        });
+    }
+
+    // Xử lý Đăng xuất
+    if (btnLogout) {
+        btnLogout.addEventListener("click", async () => {
+            if (confirm("Bạn có chắc chắn muốn đăng xuất khỏi hệ thống không?")) {
+                try {
+                    await fetch("/api/auth/logout", {
+                        method: "POST",
+                        headers: getAuthHeaders()
+                    });
+                } catch {}
+
+                localStorage.removeItem("pulumi_auth_token");
+                currentAuthToken = "";
+                currentAuthUser = null;
+                showToast("Đã đăng xuất an toàn.");
+                showLoginModal();
+            }
+        });
+    }
+
+    // Modal Đổi Mật Khẩu
+    const changePasswordModal = document.getElementById("changePasswordModal");
+    const btnChangePasswordModal = document.getElementById("btnChangePasswordModal");
+    const btnClosePasswordModal = document.getElementById("btnClosePasswordModal");
+    const btnCancelChangePassword = document.getElementById("btnCancelChangePassword");
+    const changePasswordForm = document.getElementById("changePasswordForm");
+    const oldPasswordInput = document.getElementById("oldPasswordInput");
+    const newPasswordInput = document.getElementById("newPasswordInput");
+    const confirmPasswordInput = document.getElementById("confirmPasswordInput");
+    const changePassError = document.getElementById("changePassError");
+    const btnSubmitChangePassword = document.getElementById("btnSubmitChangePassword");
+
+    if (btnChangePasswordModal) {
+        btnChangePasswordModal.addEventListener("click", () => {
+            if (changePasswordForm) changePasswordForm.reset();
+            if (changePassError) changePassError.classList.add("hidden");
+            changePasswordModal.classList.remove("hidden");
+            if (window.lucide) window.lucide.createIcons();
+        });
+    }
+
+    const closeChangePass = () => changePasswordModal.classList.add("hidden");
+    if (btnClosePasswordModal) btnClosePasswordModal.addEventListener("click", closeChangePass);
+    if (btnCancelChangePassword) btnCancelChangePassword.addEventListener("click", closeChangePass);
+
+    if (changePasswordForm) {
+        changePasswordForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const oldPassword = oldPasswordInput.value;
+            const newPassword = newPasswordInput.value;
+            const confirmPassword = confirmPasswordInput.value;
+
+            if (newPassword !== confirmPassword) {
+                changePassError.textContent = "Mật khẩu xác nhận không khớp!";
+                changePassError.classList.remove("hidden");
+                return;
+            }
+
+            btnSubmitChangePassword.disabled = true;
+            btnSubmitChangePassword.querySelector(".spinner")?.classList.remove("hidden");
+
+            try {
+                const res = await fetch("/api/auth/change-password", {
+                    method: "POST",
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ oldPassword, newPassword })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    closeChangePass();
+                    showToast("🎉 Đổi mật khẩu thành công! Mật khẩu mới có hiệu lực ngay.");
+                    loadAuditLogs();
+                } else {
+                    changePassError.textContent = data.error || "Không thể đổi mật khẩu.";
+                    changePassError.classList.remove("hidden");
+                }
+            } catch (err) {
+                changePassError.textContent = `Lỗi: ${err.message}`;
+                changePassError.classList.remove("hidden");
+            } finally {
+                btnSubmitChangePassword.disabled = false;
+                btnSubmitChangePassword.querySelector(".spinner")?.classList.add("hidden");
+            }
+        });
+    }
+
+    // Áp dụng chính sách hiển thị giao diện theo 3 Role (Admin, Developer, Viewer)
+    function applyRbacUiRestrictions() {
+        const userRole = currentAuthUser ? currentAuthUser.role : "viewer";
+        const envRadios = document.querySelectorAll("input[name='environment']");
+        const deployTabBtn = document.querySelector(".nav-tab[data-tab='tab-deploy']");
+        const btnSubmitVm = document.getElementById("btnSubmit");
+
+        // 1. Viewer: Vô hiệu hóa nút tạo VM, nút xóa, nút power
+        if (userRole === "viewer") {
+            if (deployTabBtn) deployTabBtn.style.opacity = "0.5";
+            if (btnSubmitVm) {
+                btnSubmitVm.disabled = true;
+                btnSubmitVm.title = "Tài khoản Viewer không có quyền tạo VM";
+            }
+        } else {
+            if (deployTabBtn) deployTabBtn.style.opacity = "1";
+            if (btnSubmitVm) {
+                btnSubmitVm.disabled = false;
+                btnSubmitVm.title = "";
+            }
+        }
+
+        // 2. Developer: Khóa các tùy chọn STAGING / PROD
+        const isDevOnly = userRole === "developer";
         envRadios.forEach(r => {
             if (isDevOnly) {
                 if (r.value !== "dev") {
                     r.disabled = true;
-                    r.closest(".env-option-card")?.classList.add("disabled-option");
+                    r.closest(".env-radio-card")?.classList.add("disabled-option");
                 } else {
                     r.checked = true;
                 }
             } else {
-                r.disabled = false;
-                r.closest(".env-option-card")?.classList.remove("disabled-option");
+                r.disabled = (userRole === "viewer");
+                r.closest(".env-radio-card")?.classList.remove("disabled-option");
             }
         });
     }
+
+    checkAuthSession();
 
     // Tabs Navigation
     const tabs = document.querySelectorAll(".nav-tab");
@@ -493,10 +754,6 @@ document.addEventListener("DOMContentLoaded", () => {
                                         <i data-lucide="play" class="action-icon-xs"></i>
                                     </button>
                                 `}
-                                <button class="btn-action-sm btn-action-console" onclick="openVmConsole('${node.node}', ${vm.vmid}, '${vm.name}')" title="Mở Web Console (noVNC)">
-                                    <i data-lucide="terminal" class="btn-icon-sm"></i>
-                                    <span>Console</span>
-                                </button>
                                 <button class="btn-action-sm btn-action-snap" onclick="openVmSnapshots('${node.node}', ${vm.vmid}, '${vm.name}')" title="Quản lý Snapshots">
                                     <i data-lucide="camera" class="btn-icon-sm"></i>
                                     <span>Snapshot</span>
@@ -826,7 +1083,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     // ==========================================
-    // VM LIFECYCLE CONTROLS (POWER, CONSOLE, SNAPSHOTS)
+    // VM LIFECYCLE CONTROLS (POWER, SNAPSHOTS)
     // ==========================================
 
     // 1. Thao tác nguồn VM (Start, Stop, Shutdown, Reboot, Reset)
@@ -849,7 +1106,7 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             const res = await fetch(`/api/nodes/${nodeName}/vms/${vmid}/power`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({ action })
             });
             const data = await res.json();
@@ -867,56 +1124,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    // 2. Web Console (noVNC / xterm.js)
-    const consoleModal = document.getElementById("consoleModal");
-    const btnCloseConsoleModal = document.getElementById("btnCloseConsoleModal");
-    const consoleModalTitle = document.getElementById("consoleModalTitle");
-    const consoleIframe = document.getElementById("consoleIframe");
-    const btnOpenExternalConsole = document.getElementById("btnOpenExternalConsole");
-    const btnProxmoxLoginLink = document.getElementById("btnProxmoxLoginLink");
 
-    if (btnCloseConsoleModal && consoleModal) {
-        btnCloseConsoleModal.addEventListener("click", () => {
-            consoleModal.classList.add("hidden");
-            if (consoleIframe) consoleIframe.src = "";
-        });
-        consoleModal.addEventListener("click", (e) => {
-            if (e.target === consoleModal) {
-                consoleModal.classList.add("hidden");
-                if (consoleIframe) consoleIframe.src = "";
-            }
-        });
-    }
-
-    window.openVmConsole = async (nodeName, vmid, vmName) => {
-        if (!consoleModal || !consoleIframe) return;
-        consoleModalTitle.textContent = `Web Console: ${vmName || 'VM'} (#${vmid}) @ ${nodeName}`;
-        
-        try {
-            const res = await fetch(`/api/nodes/${nodeName}/vms/${vmid}/console`);
-            const data = await res.json();
-            if (data.success && data.data?.consoleUrl) {
-                const consoleUrl = data.data.consoleUrl;
-                const proxmoxHost = data.data.proxmoxHost;
-
-                if (btnProxmoxLoginLink && proxmoxHost) {
-                    btnProxmoxLoginLink.href = proxmoxHost;
-                }
-
-                if (btnOpenExternalConsole) {
-                    btnOpenExternalConsole.href = consoleUrl;
-                }
-
-                consoleIframe.src = consoleUrl;
-                consoleModal.classList.remove("hidden");
-                if (window.lucide) window.lucide.createIcons();
-            } else {
-                alert("Không lấy được URL console của máy ảo.");
-            }
-        } catch (err) {
-            alert(`Lỗi khi mở Console: ${err.message}`);
-        }
-    };
 
     // 3. Quản Lý Snapshot Máy Ảo
     const snapshotModal = document.getElementById("snapshotModal");
@@ -1024,7 +1232,7 @@ document.addEventListener("DOMContentLoaded", () => {
             try {
                 const res = await fetch(`/api/nodes/${currentSnapshotVm.node}/vms/${currentSnapshotVm.vmid}/snapshots`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({ snapname, description, vmstate })
                 });
                 const data = await res.json();
@@ -1052,7 +1260,8 @@ document.addEventListener("DOMContentLoaded", () => {
         showToast(`🔄 Đang khôi phục về snapshot '${snapname}'...`);
         try {
             const res = await fetch(`/api/nodes/${currentSnapshotVm.node}/vms/${currentSnapshotVm.vmid}/snapshots/${snapname}/rollback`, {
-                method: "POST"
+                method: "POST",
+                headers: getAuthHeaders()
             });
             const data = await res.json();
             if (data.success) {
@@ -1075,7 +1284,8 @@ document.addEventListener("DOMContentLoaded", () => {
         showToast(`🗑️ Đang xóa snapshot '${snapname}'...`);
         try {
             const res = await fetch(`/api/nodes/${currentSnapshotVm.node}/vms/${currentSnapshotVm.vmid}/snapshots/${snapname}`, {
-                method: "DELETE"
+                method: "DELETE",
+                headers: getAuthHeaders()
             });
             const data = await res.json();
             if (data.success) {
@@ -2136,11 +2346,7 @@ runcmd:
         try {
             const res = await fetch("/api/vms", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-User-Role": currentUserRole,
-                    "X-User-Name": currentUserRole === "admin" ? "admin" : "developer"
-                },
+                headers: getAuthHeaders(),
                 body: JSON.stringify(payload),
             });
             const result = await res.json();
@@ -2172,10 +2378,7 @@ runcmd:
         if (!auditTableBody) return;
         try {
             const res = await fetch("/api/audit-logs", {
-                headers: {
-                    "X-User-Role": currentUserRole,
-                    "X-User-Name": currentUserRole === "admin" ? "admin" : "developer"
-                }
+                headers: getAuthHeaders()
             });
             const data = await res.json();
 
@@ -2191,9 +2394,12 @@ runcmd:
                             ? `<span class="tag-env tag-env-pro"><i data-lucide="shield-alert" class="badge-svg"></i> Từ Chối (RBAC)</span>` 
                             : `<span class="tag-env tag-env-stag"><i data-lucide="alert-triangle" class="badge-svg"></i> Thất Bại</span>`);
 
-                    const roleBadge = log.role === "admin" 
-                        ? `<span class="tag-env tag-env-pro">👑 Admin</span>` 
-                        : `<span class="tag-env tag-env-dev">👨‍💻 Dev</span>`;
+                    let roleBadge = `<span class="tag-env tag-env-pro"><i data-lucide="shield-check" class="badge-svg"></i> Admin</span>`;
+                    if (log.role === "developer") {
+                        roleBadge = `<span class="tag-env tag-env-dev"><i data-lucide="code-2" class="badge-svg"></i> Developer</span>`;
+                    } else if (log.role === "viewer") {
+                        roleBadge = `<span class="tag-env tag-env-stag"><i data-lucide="eye" class="badge-svg"></i> Viewer</span>`;
+                    }
 
                     return `
                         <tr>

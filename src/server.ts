@@ -4,6 +4,7 @@ dotenv.config();
 import express from "express";
 import cors from "cors";
 import path from "path";
+import * as fs from "fs";
 import { LocalWorkspace } from "@pulumi/pulumi/automation";
 import { createVmProgram, VmConfig } from "./pulumi-program";
 import { proxmoxClient } from "./proxmox-api";
@@ -14,6 +15,107 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "../public")));
+
+// ==========================================
+// USER AUTHENTICATION & RBAC CONFIGURATION
+// ==========================================
+export interface UserAccount {
+    username: string;
+    password: string;
+    role: "admin" | "developer" | "viewer";
+    displayName: string;
+    avatar: string;
+}
+
+// Lấy danh sách tài khoản từ biến môi trường .env (luôn nạp mới từ file .env nếu có thay đổi)
+function getUserAccounts(): Record<string, UserAccount> {
+    const envPaths = [
+        path.resolve(process.cwd(), ".env"),
+        path.join(__dirname, "../.env"),
+        path.join(__dirname, "../../.env")
+    ];
+
+    for (const envPath of envPaths) {
+        try {
+            if (fs.existsSync(envPath)) {
+                const parsed = dotenv.parse(fs.readFileSync(envPath, "utf-8"));
+                Object.assign(process.env, parsed);
+                break;
+            }
+        } catch {}
+    }
+
+    const accounts: Record<string, UserAccount> = {};
+
+    const adminUser = process.env.AUTH_ADMIN_USERNAME ? String(process.env.AUTH_ADMIN_USERNAME).trim().replace(/^["']|["']$/g, "") : "";
+    const adminPass = process.env.AUTH_ADMIN_PASSWORD ? String(process.env.AUTH_ADMIN_PASSWORD).trim().replace(/^["']|["']$/g, "") : "";
+
+    const devUser = process.env.AUTH_DEV_USERNAME ? String(process.env.AUTH_DEV_USERNAME).trim().replace(/^["']|["']$/g, "") : "";
+    const devPass = process.env.AUTH_DEV_PASSWORD ? String(process.env.AUTH_DEV_PASSWORD).trim().replace(/^["']|["']$/g, "") : "";
+
+    const viewerUser = process.env.AUTH_VIEWER_USERNAME ? String(process.env.AUTH_VIEWER_USERNAME).trim().replace(/^["']|["']$/g, "") : "";
+    const viewerPass = process.env.AUTH_VIEWER_PASSWORD ? String(process.env.AUTH_VIEWER_PASSWORD).trim().replace(/^["']|["']$/g, "") : "";
+
+    if (adminUser && adminPass) {
+        accounts[adminUser] = {
+            username: adminUser,
+            password: adminPass,
+            role: "admin",
+            displayName: "Administrator",
+            avatar: "shield-check"
+        };
+    }
+
+    if (devUser && devPass) {
+        accounts[devUser] = {
+            username: devUser,
+            password: devPass,
+            role: "developer",
+            displayName: "DevSecOps Engineer",
+            avatar: "code-2"
+        };
+    }
+
+    if (viewerUser && viewerPass) {
+        accounts[viewerUser] = {
+            username: viewerUser,
+            password: viewerPass,
+            role: "viewer",
+            displayName: "Cloud Monitor / Viewer",
+            avatar: "eye"
+        };
+    }
+
+    return accounts;
+}
+
+// In-memory runtime session store
+const activeSessions = new Map<string, { username: string; role: string; displayName: string; avatar: string; loginTime: number }>();
+
+// Auth Middleware: Trích xuất thông tin người dùng từ Session Token hoặc Authorization Header
+function getAuthUser(req: express.Request) {
+    const authHeader = req.headers["authorization"] || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.substring(7) : (req.headers["x-auth-token"] as string);
+
+    if (token && activeSessions.has(token)) {
+        return activeSessions.get(token)!;
+    }
+
+    // Fallback qua custom header nếu chạy chế độ test
+    const userRole = (req.headers["x-user-role"] as string);
+    const userName = (req.headers["x-user-name"] as string);
+    if (userRole && userName) {
+        return {
+            username: userName,
+            role: userRole,
+            displayName: userName === "admin" ? "Administrator" : (userName === "viewer" ? "Viewer" : "Developer"),
+            avatar: userRole === "admin" ? "shield-check" : (userRole === "viewer" ? "eye" : "code-2"),
+            loginTime: Date.now()
+        };
+    }
+
+    return null;
+}
 
 // ==========================================
 // AUDIT LOGS & RBAC GOVERNANCE
@@ -40,7 +142,7 @@ const auditLogs: AuditLogEntry[] = [
         action: "SYSTEM_INIT",
         target: "Proxmox Cluster",
         status: "SUCCESS",
-        details: "Hệ thống Governance & Audit Logs khởi động thành công"
+        details: "Hệ thống Authentication, Governance & Audit Logs khởi động thành công"
     }
 ];
 
@@ -64,6 +166,186 @@ function broadcastLog(message: string) {
         listener(message);
     }
 }
+
+// ==========================================
+// AUTHENTICATION ROUTES
+// ==========================================
+
+// 1. Đăng nhập người dùng (User Login)
+app.post("/api/auth/login", (req, res) => {
+    const rawUsername = String(req.body.username || "").trim();
+    const rawPassword = String(req.body.password || "").trim();
+    const users = getUserAccounts();
+
+    const user = users[rawUsername];
+    const expectedPassword = user ? String(user.password || "").trim().replace(/^["']|["']$/g, "") : "";
+    const cleanRawPassword = rawPassword.replace(/^["']|["']$/g, "");
+
+    const isMatched = user && (expectedPassword === cleanRawPassword);
+
+    if (!isMatched) {
+        console.warn(`[AUTH FAILED] User: '${rawUsername}' | Expected: '${expectedPassword}' | Received: '${cleanRawPassword}'`);
+        recordAuditLog({
+            username: rawUsername || "unknown",
+            role: "unknown",
+            action: "LOGIN_FAILED",
+            target: "Auth Service",
+            status: "FAILED",
+            details: `Thất bại khi đăng nhập với tài khoản '${rawUsername}'. Sai tên đăng nhập hoặc mật khẩu.`
+        });
+        return res.status(401).json({ 
+            success: false, 
+            error: `Tên đăng nhập hoặc mật khẩu không chính xác. (Mật khẩu tài khoản '${rawUsername}' đang được cấu hình trong .env)` 
+        });
+    }
+
+    console.log(`[AUTH SUCCESS] User '${user.username}' (${user.role}) đăng nhập thành công!`);
+
+    // Tạo token session ngẫu nhiên
+    const token = `session_${user.username}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    activeSessions.set(token, {
+        username: user.username,
+        role: user.role,
+        displayName: user.displayName,
+        avatar: user.avatar,
+        loginTime: Date.now()
+    });
+
+    recordAuditLog({
+        username: user.username,
+        role: user.role,
+        action: "USER_LOGIN",
+        target: "Portal UI",
+        status: "SUCCESS",
+        details: `Đăng nhập thành công với vai trò ${user.role.toUpperCase()} (${user.displayName})`
+    });
+
+    res.json({
+        success: true,
+        data: {
+            token,
+            user: {
+                username: user.username,
+                role: user.role,
+                displayName: user.displayName,
+                avatar: user.avatar
+            }
+        }
+    });
+});
+
+// Endpoint kiểm tra nhanh trạng thái tài khoản đang được nạp
+app.get("/api/auth/status", (req, res) => {
+    const users = getUserAccounts();
+    const safeUsers = Object.keys(users).map(k => ({
+        username: users[k].username,
+        role: users[k].role,
+        displayName: users[k].displayName,
+        passwordLength: users[k].password.length,
+        passwordPreview: users[k].password.substring(0, 2) + "***"
+    }));
+    res.json({ success: true, loadedAccounts: safeUsers });
+});
+
+// 2. Lấy thông tin user hiện tại qua Session Token
+app.get("/api/auth/me", (req, res) => {
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: "Chưa đăng nhập hoặc phiên làm việc đã hết hạn." });
+    }
+
+    res.json({
+        success: true,
+        data: {
+            username: authUser.username,
+            role: authUser.role,
+            displayName: authUser.displayName,
+            avatar: authUser.avatar
+        }
+    });
+});
+
+// 3. Đăng xuất (Logout)
+app.post("/api/auth/logout", (req, res) => {
+    const authHeader = req.headers["authorization"] || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.substring(7) : (req.headers["x-auth-token"] as string);
+
+    if (token && activeSessions.has(token)) {
+        const user = activeSessions.get(token);
+        activeSessions.delete(token);
+        if (user) {
+            recordAuditLog({
+                username: user.username,
+                role: user.role,
+                action: "USER_LOGOUT",
+                target: "Portal UI",
+                status: "SUCCESS",
+                details: `Người dùng '${user.username}' đã đăng xuất an toàn khỏi hệ thống.`
+            });
+        }
+    }
+
+    res.json({ success: true, message: "Đăng xuất thành công." });
+});
+
+// 4. Đổi mật khẩu phiên hiện tại (Runtime Password Change & Persist to .env)
+app.post("/api/auth/change-password", (req, res) => {
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+        return res.status(401).json({ success: false, error: "Vui lòng đăng nhập trước khi đổi mật khẩu." });
+    }
+
+    const { oldPassword, newPassword } = req.body;
+    if (!newPassword || newPassword.trim().length < 4) {
+        return res.status(400).json({ success: false, error: "Mật khẩu mới phải có ít nhất 4 ký tự." });
+    }
+
+    const users = getUserAccounts();
+    const user = users[authUser.username];
+    if (!user || user.password !== oldPassword) {
+        return res.status(400).json({ success: false, error: "Mật khẩu cũ không đúng." });
+    }
+
+    let envKey = "AUTH_ADMIN_PASSWORD";
+    if (authUser.role === "admin") {
+        process.env.AUTH_ADMIN_PASSWORD = newPassword;
+        envKey = "AUTH_ADMIN_PASSWORD";
+    } else if (authUser.role === "developer") {
+        process.env.AUTH_DEV_PASSWORD = newPassword;
+        envKey = "AUTH_DEV_PASSWORD";
+    } else if (authUser.role === "viewer") {
+        process.env.AUTH_VIEWER_PASSWORD = newPassword;
+        envKey = "AUTH_VIEWER_PASSWORD";
+    }
+
+    // Ghi đè mật khẩu mới vào trực tiếp file .env để không bị mất khi restart server
+    try {
+        const envPath = path.join(__dirname, "../.env");
+        if (fs.existsSync(envPath)) {
+            let envContent = fs.readFileSync(envPath, "utf-8");
+            const regex = new RegExp(`^${envKey}=.*$`, "m");
+            if (regex.test(envContent)) {
+                envContent = envContent.replace(regex, `${envKey}="${newPassword}"`);
+            } else {
+                envContent += `\n${envKey}="${newPassword}"\n`;
+            }
+            fs.writeFileSync(envPath, envContent, "utf-8");
+        }
+    } catch (err: any) {
+        console.error(`[AUTH] Không thể ghi file .env:`, err.message);
+    }
+
+    recordAuditLog({
+        username: authUser.username,
+        role: authUser.role,
+        action: "CHANGE_PASSWORD",
+        target: "Account Security",
+        status: "SUCCESS",
+        details: `Người dùng '${authUser.username}' đã đổi mật khẩu thành công và lưu vào .env.`
+    });
+
+    res.json({ success: true, message: "Đã đổi mật khẩu thành công! Mật khẩu mới đã được lưu vào file .env và có hiệu lực vĩnh viễn." });
+});
 
 // Endpoint lấy danh sách Audit Logs
 app.get("/api/audit-logs", (req, res) => {
@@ -261,13 +543,30 @@ async function resolveDatastoreForNode(nodeName: string, preferredDatastore?: st
 
 // Endpoint tạo 1 VM hoặc Cụm nhiều VM
 app.post("/api/vms", async (req, res) => {
-    const userRole = (req.headers["x-user-role"] as string) || "admin";
-    const userName = (req.headers["x-user-name"] as string) || (userRole === "admin" ? "admin" : "developer");
+    const authUser = getAuthUser(req) || { username: "admin", role: "admin", displayName: "Administrator" };
+    const userRole = authUser.role;
+    const userName = authUser.username;
     const body = req.body;
     const vms: VmConfig[] = Array.isArray(body.vms) ? body.vms : [body];
 
     if (!vms || vms.length === 0) {
         return res.status(400).json({ success: false, error: "Danh sách VM rỗng." });
+    }
+
+    // RBAC Check: Viewer chỉ được xem, không được tạo VM
+    if (userRole === "viewer") {
+        recordAuditLog({
+            username: userName,
+            role: userRole,
+            action: "CREATE_VM_DENIED",
+            target: vms.map(v => v.name).join(", "),
+            status: "DENIED",
+            details: `Tài khoản Viewer '${userName}' bị chặn quyền tạo máy ảo.`
+        });
+        return res.status(403).json({
+            success: false,
+            error: "[RBAC DENIED] Tài khoản của bạn có vai trò 'Viewer' (Chỉ xem). Bạn không có quyền khởi tạo máy ảo mới."
+        });
     }
 
     // RBAC Check: Developer chỉ được phép tạo trên môi trường DEV
@@ -371,10 +670,27 @@ app.post("/api/vms", async (req, res) => {
 
 // Endpoint xóa VM (kiểm tra protection)
 app.delete("/api/vms/:stackName", async (req, res) => {
-    const userRole = (req.headers["x-user-role"] as string) || "admin";
-    const userName = (req.headers["x-user-name"] as string) || (userRole === "admin" ? "admin" : "developer");
+    const authUser = getAuthUser(req) || { username: "admin", role: "admin", displayName: "Administrator" };
+    const userRole = authUser.role;
+    const userName = authUser.username;
     const { stackName } = req.params;
     const force = req.query.force === "true";
+
+    // RBAC Check: Viewer chỉ được xem, không được xóa
+    if (userRole === "viewer") {
+        recordAuditLog({
+            username: userName,
+            role: userRole,
+            action: "DELETE_VM_DENIED",
+            target: stackName,
+            status: "DENIED",
+            details: `Viewer '${userName}' bị chặn quyền xóa stack '${stackName}'.`
+        });
+        return res.status(403).json({
+            success: false,
+            error: "[RBAC DENIED] Tài khoản Viewer không có quyền xóa máy ảo."
+        });
+    }
 
     broadcastLog(`\n[DESTROY] [User: ${userName} (${userRole.toUpperCase()})] Bắt đầu xử lý xóa stack '${stackName}'...`);
 
@@ -475,8 +791,26 @@ app.delete("/api/vms/:stackName", async (req, res) => {
 
 // 1. Thao tác nguồn VM (start, stop, shutdown, reset, reboot)
 app.post("/api/nodes/:node/vms/:vmid/power", async (req, res) => {
+    const authUser = getAuthUser(req) || { username: "admin", role: "admin", displayName: "Administrator" };
+    const userRole = authUser.role;
+    const userName = authUser.username;
     const { node, vmid } = req.params;
     const { action } = req.body; // "start" | "stop" | "shutdown" | "reset" | "reboot"
+
+    if (userRole === "viewer") {
+        recordAuditLog({
+            username: userName,
+            role: userRole,
+            action: `POWER_${action.toUpperCase()}_DENIED`,
+            target: `VM #${vmid} (@${node})`,
+            status: "DENIED",
+            details: `Viewer '${userName}' bị chặn thực hiện lệnh nguồn '${action}' trên VM #${vmid}.`
+        });
+        return res.status(403).json({
+            success: false,
+            error: "[RBAC DENIED] Tài khoản Viewer không có quyền thao tác nguồn (Power Control) trên máy ảo."
+        });
+    }
 
     if (!["start", "stop", "shutdown", "reset", "reboot"].includes(action)) {
         return res.status(400).json({ success: false, error: "Hành động nguồn không hợp lệ." });
@@ -509,7 +843,16 @@ app.post("/api/nodes/:node/vms/:vmid/power", async (req, res) => {
                 break;
         }
 
-        broadcastLog(`⚡ [POWER] Đã gửi lệnh ${actionLabel} tới VM #${vmid} trên Node '${node}' (Task ID: ${task || 'OK'})`);
+        recordAuditLog({
+            username: userName,
+            role: userRole,
+            action: `POWER_${action.toUpperCase()}`,
+            target: `VM #${vmid} (@${node})`,
+            status: "SUCCESS",
+            details: `Gửi lệnh ${actionLabel} tới VM #${vmid}`
+        });
+
+        broadcastLog(`⚡ [POWER] [User: ${userName}] Đã gửi lệnh ${actionLabel} tới VM #${vmid} trên Node '${node}' (Task ID: ${task || 'OK'})`);
         res.json({ success: true, message: `Lệnh ${actionLabel} đã được gửi thành công.`, data: task });
     } catch (error: any) {
         broadcastLog(`❌ [POWER ERROR] Lỗi khi thực hiện lệnh nguồn '${action}' cho VM #${vmid}: ${error.message}`);
@@ -530,15 +873,25 @@ app.get("/api/nodes/:node/vms/:vmid/snapshots", async (req, res) => {
 
 // 3. Tạo Snapshot mới cho VM
 app.post("/api/nodes/:node/vms/:vmid/snapshots", async (req, res) => {
+    const authUser = getAuthUser(req) || { username: "admin", role: "admin", displayName: "Administrator" };
+    const userRole = authUser.role;
+    const userName = authUser.username;
     const { node, vmid } = req.params;
     const { snapname, description, vmstate } = req.body;
+
+    if (userRole === "viewer") {
+        return res.status(403).json({
+            success: false,
+            error: "[RBAC DENIED] Tài khoản Viewer không có quyền tạo Snapshot."
+        });
+    }
 
     if (!snapname) {
         return res.status(400).json({ success: false, error: "Tên Snapshot là bắt buộc." });
     }
 
     try {
-        broadcastLog(`📸 [SNAPSHOT] Đang tạo snapshot '${snapname}' cho VM #${vmid} trên Node '${node}'...`);
+        broadcastLog(`📸 [SNAPSHOT] [User: ${userName}] Đang tạo snapshot '${snapname}' cho VM #${vmid} trên Node '${node}'...`);
         const result = await proxmoxClient.createVmSnapshot(node, vmid, snapname, description, !!vmstate);
         broadcastLog(`✅ [SNAPSHOT] Tạo snapshot '${snapname}' cho VM #${vmid} hoàn tất!`);
         res.json({ success: true, message: `Đã tạo snapshot '${snapname}' thành công.`, data: result });
