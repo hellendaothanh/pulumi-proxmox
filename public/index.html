@@ -105,267 +105,365 @@
                         <p>Cấu hình tài nguyên và tự động provision qua Pulumi Engine</p>
                     </div>
 
-                    <form id="createVmForm">
-                        <div class="form-row">
-                            <div class="form-group flex-2">
-                                <label for="vmName">
-                                    <i data-lucide="tag" class="field-icon"></i>
-                                    Tên Máy Ảo / Tiền Tố Cụm (VM Base Name)
-                                </label>
-                                <input type="text" id="vmName" name="name" placeholder="vd: ubuntu-server, db-master, k8s-node..." required>
-                            </div>
-                            <div class="form-group flex-1">
-                                <div class="label-with-value">
-                                    <label for="vmCount">
-                                        <i data-lucide="copy-plus" class="field-icon"></i>
-                                        Số Lượng (Cluster)
-                                    </label>
-                                    <span class="value-badge" id="vmCountVal">1 VM</span>
+                    <form id="createVmForm" class="stepped-provision-form" novalidate>
+                        <!-- BƯỚC 1: THÔNG TIN CƠ BẢN & MÔI TRƯỜNG -->
+                        <details id="step1Details" class="form-step-details" open>
+                            <summary class="step-summary-header">
+                                <div class="step-badge-title" style="margin-bottom:0;">
+                                    <span class="step-num">1</span>
+                                    <span class="step-title">Thông Tin Cơ Bản & Môi Trường</span>
                                 </div>
-                                <input type="range" id="vmCount" name="vmCount" min="1" max="10" value="1" step="1">
-                            </div>
-                        </div>
+                                <i data-lucide="chevron-down" class="accordion-chevron"></i>
+                            </summary>
 
-                        <!-- Environment Selector (DEV, STAG, PRO) -->
-                        <div class="form-group">
-                            <label>
-                                <i data-lucide="shield-check" class="field-icon"></i>
-                                Môi Trường Triển Khai (Environment)
-                            </label>
-                            <div class="env-selector-grid">
-                                <label class="env-radio-card env-card-dev active">
-                                    <input type="radio" name="environment" value="dev" checked>
-                                    <span class="env-indicator-dot dev"></span>
-                                    <span>DEV (Phát Triển)</span>
-                                </label>
-                                <label class="env-radio-card env-card-stag">
-                                    <input type="radio" name="environment" value="stag">
-                                    <span class="env-indicator-dot stag"></span>
-                                    <span>STAGING (Kiểm Thử)</span>
-                                </label>
-                                <label class="env-radio-card env-card-pro">
-                                    <input type="radio" name="environment" value="pro">
-                                    <span class="env-indicator-dot pro"></span>
-                                    <span>PROD (Production)</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <!-- Row: Custom Tags & CPU Architecture -->
-                        <div class="form-row">
-                            <div class="form-group flex-1">
-                                <label for="customTags">
-                                    <i data-lucide="tags" class="field-icon"></i>
-                                    Tags Phân Loại (Cách nhau bằng dấu phẩy)
-                                </label>
-                                <input type="text" id="customTags" name="tags" placeholder="vd: database, postgresql, backend">
-                            </div>
-                            <div class="form-group flex-1">
-                                <label for="cpuType">
-                                    <i data-lucide="cpu" class="field-icon"></i>
-                                    Kiến Trúc CPU (CPU Model)
-                                </label>
-                                <select id="cpuType" name="cpuType">
-                                    <option value="host" selected>Host Passthrough (Tối ưu phần cứng - Khuyên dùng)</option>
-                                    <option value="x86-64-v2-AES">x86-64-v2-AES (Tương thích CPU hỗn hợp)</option>
-                                    <option value="x86-64-v3">x86-64-v3 (Modern CPU - Hỗ trợ AVX2)</option>
-                                    <option value="kvm64">KVM64 (Ảo hóa phổ quát)</option>
-                                    <option value="qemu64">QEMU64 (Mặc định)</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- Single Node Selection Row (chỉ hiển thị khi tạo 1 VM) -->
-                        <div id="singleNodeSection">
-                            <div class="form-row">
-                                <div class="form-group flex-1">
-                                    <label for="nodeName">
-                                        <i data-lucide="hard-drive" class="field-icon"></i>
-                                        Proxmox Node
-                                    </label>
-                                    <select id="nodeName" name="nodeName">
-                                        <option value="" disabled selected>Đang tải danh sách Node từ API...</option>
-                                    </select>
-                                    <div id="nodeInfoChip" style="margin-top: 6px;"></div>
+                            <div class="details-content-body">
+                                <div class="form-row" style="margin-top: 12px;">
+                                    <div class="form-group flex-2">
+                                        <label for="vmName">
+                                            <i data-lucide="tag" class="field-icon"></i>
+                                            <span>Tên Máy Ảo / Tiền Tố (VM Base Name)</span>
+                                            <span class="required-star">*</span>
+                                        </label>
+                                        <input type="text" id="vmName" name="name" placeholder="vd: ubuntu-server, db-master, k8s-node..." required>
+                                    </div>
+                                    <div class="form-group flex-1">
+                                        <div class="label-with-value">
+                                            <label for="vmCount">
+                                                <i data-lucide="copy-plus" class="field-icon"></i>
+                                                <span>Số Lượng</span>
+                                            </label>
+                                            <span class="value-badge" id="vmCountVal">1 VM</span>
+                                        </div>
+                                        <input type="range" id="vmCount" name="vmCount" min="1" max="10" value="1" step="1">
+                                    </div>
                                 </div>
-                                <div class="form-group flex-1">
-                                    <label for="datastoreId">
-                                        <i data-lucide="database" class="field-icon"></i>
-                                        Ổ Lưu Trữ (Storage / Datastore)
+
+                                <!-- Environment Selector (DEV, STAG, PRO) -->
+                                <div class="form-group" style="margin-bottom: 8px;">
+                                    <div class="env-selector-grid">
+                                        <label class="env-radio-card env-card-dev active">
+                                            <input type="radio" name="environment" value="dev" checked>
+                                            <span class="env-indicator-dot dev"></span>
+                                            <span>DEV</span>
+                                        </label>
+                                        <label class="env-radio-card env-card-stag">
+                                            <input type="radio" name="environment" value="stag">
+                                            <span class="env-indicator-dot stag"></span>
+                                            <span>STAGING</span>
+                                        </label>
+                                        <label class="env-radio-card env-card-pro">
+                                            <input type="radio" name="environment" value="pro">
+                                            <span class="env-indicator-dot pro"></span>
+                                            <span>PROD</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="step-nav-actions">
+                                    <button type="button" class="btn-step-next" onclick="goToStep(2)">
+                                        <span>Tiếp theo: Chọn Node & Image</span>
+                                        <i data-lucide="chevron-right" class="btn-icon-sm"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </details>
+
+                        <!-- BƯỚC 2: VỊ TRÍ, LƯU TRỮ & OS IMAGE -->
+                        <details id="step2Details" class="form-step-details">
+                            <summary class="step-summary-header">
+                                <div class="step-badge-title" style="margin-bottom:0;">
+                                    <span class="step-num">2</span>
+                                    <span class="step-title">Node, Lưu Trữ & Hệ Điều Hành</span>
+                                </div>
+                                <i data-lucide="chevron-down" class="accordion-chevron"></i>
+                            </summary>
+
+                            <div class="details-content-body">
+                                <!-- Single Node Selection Row (chỉ hiển thị khi tạo 1 VM) -->
+                                <div id="singleNodeSection" style="margin-top: 12px;">
+                                    <div class="form-row">
+                                        <div class="form-group flex-1">
+                                            <label for="nodeName">
+                                                <i data-lucide="hard-drive" class="field-icon"></i>
+                                                <span>Proxmox Node</span>
+                                                <span class="required-star">*</span>
+                                            </label>
+                                            <select id="nodeName" name="nodeName" required>
+                                                <option value="" disabled selected>Đang tải danh sách Node từ API...</option>
+                                            </select>
+                                            <div id="nodeInfoChip" style="margin-top: 4px;"></div>
+                                        </div>
+                                        <div class="form-group flex-1">
+                                            <label for="datastoreId">
+                                                <i data-lucide="database" class="field-icon"></i>
+                                                <span>Ổ Lưu Trữ VM Disk</span>
+                                                <span class="required-star">*</span>
+                                            </label>
+                                            <select id="datastoreId" name="datastoreId" required>
+                                                <option value="" disabled selected>Chọn Node trước...</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <!-- Live Node Resource Breakdown Card -->
+                                    <div id="nodeResourceCard" class="node-resource-card" style="display:none; margin-bottom: 12px;"></div>
+                                </div>
+
+                                <!-- Multi-Node Distribution Section (tự động bật khi tạo > 1 VM) -->
+                                <div id="multiNodeSection" class="form-group hidden" style="margin-top: 12px;">
+                                    <div class="label-with-value">
+                                        <label>
+                                            <i data-lucide="network" class="field-icon"></i>
+                                            <span>Phân Bổ Cụm Node (Round-Robin)</span>
+                                            <span class="required-star">*</span>
+                                        </label>
+                                    </div>
+                                    <div class="node-filter-tabs">
+                                        <button type="button" class="node-filter-btn active" data-filter="all">Tất Cả</button>
+                                    </div>
+                                    <div id="nodesCheckboxContainer" class="nodes-checkbox-grid">
+                                        <!-- Rendered dynamically -->
+                                    </div>
+                                </div>
+
+                                <!-- Live Cluster Preview Box -->
+                                <div id="vmClusterPreview" class="cluster-preview-box hidden">
+                                    <div class="preview-header">
+                                        <i data-lucide="layers" class="icon-accent-sm"></i>
+                                        <span id="previewHeaderTitle">Xem trước danh sách phân bổ máy ảo:</span>
+                                    </div>
+                                    <div id="previewList" class="preview-items-list">
+                                        <!-- Rendered dynamically -->
+                                    </div>
+                                </div>
+
+                                <!-- OS Image Selector -->
+                                <div class="form-group" style="margin-bottom: 8px;">
+                                    <label for="diskImageId">
+                                        <i data-lucide="disc" class="field-icon"></i>
+                                        <span>Image Hệ Điều Hành (Cloud-Init / ISO)</span>
+                                        <span class="required-star">*</span>
                                     </label>
-                                    <select id="datastoreId" name="datastoreId" required>
+                                    <select id="diskImageId" name="diskImageId" required>
                                         <option value="" disabled selected>Chọn Node trước...</option>
                                     </select>
                                 </div>
-                            </div>
-                            <!-- Live Node Resource Breakdown Card -->
-                            <div id="nodeResourceCard" class="node-resource-card" style="display:none; margin-bottom: 16px;"></div>
-                        </div>
 
-                        <!-- Multi-Node Distribution Section (tự động bật khi tạo > 1 VM) -->
-                        <div id="multiNodeSection" class="form-group hidden">
-                            <div class="label-with-value">
-                                <label>
-                                    <i data-lucide="network" class="field-icon"></i>
-                                    Chọn Các Node Để Phân Bổ (Distribution Nodes)
-                                </label>
-                                <span class="text-muted" style="font-size:11.5px;">(Tự động rải đều theo Round-Robin)</span>
+                                <div class="step-nav-actions flex-between">
+                                    <button type="button" class="btn-step-prev" onclick="goToStep(1)">
+                                        <i data-lucide="chevron-left" class="btn-icon-sm"></i>
+                                        <span>Quay lại</span>
+                                    </button>
+                                    <button type="button" class="btn-step-next" onclick="goToStep(3)">
+                                        <span>Tiếp theo: Phần Cứng & Mạng</span>
+                                        <i data-lucide="chevron-right" class="btn-icon-sm"></i>
+                                    </button>
+                                </div>
                             </div>
-                            <div class="node-filter-tabs">
-                                <button type="button" class="node-filter-btn active" data-filter="all">Tất Cả</button>
-                            </div>
-                            <div id="nodesCheckboxContainer" class="nodes-checkbox-grid">
-                                <!-- Rendered dynamically -->
-                            </div>
-                        </div>
+                        </details>
 
-                        <!-- Live Cluster Preview Box -->
-                        <div id="vmClusterPreview" class="cluster-preview-box hidden">
-                            <div class="preview-header">
-                                <i data-lucide="layers" class="icon-accent-sm"></i>
-                                <span id="previewHeaderTitle">Xem trước danh sách phân bổ máy ảo:</span>
-                            </div>
-                            <div id="previewList" class="preview-items-list">
-                                <!-- Rendered dynamically -->
-                            </div>
-                        </div>
+                        <!-- BƯỚC 3: CẤU HÌNH PHẦN CỨNG & MẠNG -->
+                        <details id="step3Details" class="form-step-details">
+                            <summary class="step-summary-header">
+                                <div class="step-badge-title" style="margin-bottom:0;">
+                                    <span class="step-num">3</span>
+                                    <span class="step-title">Tài Nguyên Phần Cứng & Mạng</span>
+                                </div>
+                                <i data-lucide="chevron-down" class="accordion-chevron"></i>
+                            </summary>
 
-                        <!-- OS Image Selector -->
-                        <div class="form-group">
-                            <label for="diskImageId">
-                                <i data-lucide="disc" class="field-icon"></i>
-                                Image Hệ Điều Hành (Cloud-Init / ISO)
-                            </label>
-                            <select id="diskImageId" name="diskImageId" required>
-                                <option value="" disabled selected>Chọn Node trước...</option>
-                            </select>
-                        </div>
+                            <div class="details-content-body">
+                                <!-- Hardware Size Presets (Template Cấu hình nhanh) -->
+                                <div class="hw-presets-wrapper" style="margin-top: 12px; margin-bottom: 12px;">
+                                    <div class="hw-presets-label">
+                                        <i data-lucide="sliders" class="field-icon"></i>
+                                        <span>Mẫu cấu hình nhanh (Hardware Templates):</span>
+                                    </div>
+                                    <div class="hw-presets-grid">
+                                        <button type="button" class="btn-hw-preset" onclick="applyHardwarePreset(1, 1, 15)">
+                                            <span class="hw-preset-name">Nano / Micro</span>
+                                            <span class="hw-preset-spec">1 vCPU · 1GB · 15GB</span>
+                                        </button>
+                                        <button type="button" class="btn-hw-preset active" onclick="applyHardwarePreset(2, 2, 20)">
+                                            <span class="hw-preset-name">Standard Dev</span>
+                                            <span class="hw-preset-spec">2 vCPU · 2GB · 20GB</span>
+                                        </button>
+                                        <button type="button" class="btn-hw-preset" onclick="applyHardwarePreset(2, 4, 32)">
+                                            <span class="hw-preset-name">App Server</span>
+                                            <span class="hw-preset-spec">2 vCPU · 4GB · 32GB</span>
+                                        </button>
+                                        <button type="button" class="btn-hw-preset" onclick="applyHardwarePreset(4, 8, 64)">
+                                            <span class="hw-preset-name">Database / K8s</span>
+                                            <span class="hw-preset-spec">4 vCPU · 8GB · 64GB</span>
+                                        </button>
+                                        <button type="button" class="btn-hw-preset" onclick="applyHardwarePreset(8, 16, 128)">
+                                            <span class="hw-preset-name">Heavy / Power</span>
+                                            <span class="hw-preset-spec">8 vCPU · 16GB · 128GB</span>
+                                        </button>
+                                    </div>
+                                </div>
 
-                        <!-- Network & VLAN Settings -->
-                        <div class="form-row">
-                            <div class="form-group flex-1">
-                                <label for="bridge">
-                                    <i data-lucide="network" class="field-icon"></i>
-                                    Network Bridge
-                                </label>
-                                <select id="bridge" name="bridge">
-                                    <option value="vmbr0">vmbr0 (Mặc định)</option>
-                                </select>
+                                <!-- Hardware Specs: vCPU, RAM, Disk Size -->
+                                <div class="form-row" style="margin-bottom: 14px;">
+                                    <div class="form-group flex-1">
+                                        <label for="cores">
+                                            <i data-lucide="cpu" class="field-icon"></i>
+                                            <span>vCPU Cores</span>
+                                            <span class="required-star">*</span>
+                                        </label>
+                                        <div class="numeric-input-group">
+                                            <input type="number" id="cores" name="cores" min="1" max="128" value="2" step="1" required class="spec-number-input">
+                                            <span class="unit-suffix">vCPU</span>
+                                        </div>
+                                        <input type="range" id="coresRange" min="1" max="32" value="2" step="1" class="spec-range-slider">
+                                    </div>
+
+                                    <div class="form-group flex-1">
+                                        <label for="memoryGb">
+                                            <i data-lucide="memory-stick" class="field-icon"></i>
+                                            <span>RAM (GB)</span>
+                                            <span class="required-star">*</span>
+                                        </label>
+                                        <div class="numeric-input-group">
+                                            <input type="number" id="memoryGb" name="memoryGb" min="1" max="512" value="2" step="1" required class="spec-number-input">
+                                            <span class="unit-suffix">GB</span>
+                                        </div>
+                                        <input type="range" id="memoryGbRange" min="1" max="64" value="2" step="1" class="spec-range-slider">
+                                    </div>
+
+                                    <div class="form-group flex-1">
+                                        <label for="diskSizeGb">
+                                            <i data-lucide="database" class="field-icon"></i>
+                                            <span>Ổ Đĩa OS</span>
+                                            <span class="required-star">*</span>
+                                        </label>
+                                        <div class="numeric-input-group">
+                                            <input type="number" id="diskSizeGb" name="diskSizeGb" min="5" max="2000" value="20" step="5" required class="spec-number-input">
+                                            <span class="unit-suffix">GB</span>
+                                        </div>
+                                        <input type="range" id="diskSizeGbRange" min="10" max="200" value="20" step="5" class="spec-range-slider">
+                                    </div>
+                                </div>
+
+                                <!-- Network & VLAN Settings -->
+                                <div class="form-row" style="margin-bottom: 8px;">
+                                    <div class="form-group flex-1">
+                                        <label for="bridge">
+                                            <i data-lucide="network" class="field-icon"></i>
+                                            Network Bridge
+                                        </label>
+                                        <select id="bridge" name="bridge">
+                                            <option value="vmbr0">vmbr0 (Mặc định)</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group flex-1">
+                                        <div class="label-with-value">
+                                            <label for="vlanTag">
+                                                <i data-lucide="split" class="field-icon"></i>
+                                                VLAN Tag
+                                            </label>
+                                            <span class="value-badge" id="vlanTagVal">Untagged</span>
+                                        </div>
+                                        <input type="number" id="vlanTag" name="vlanTag" min="1" max="4094" placeholder="vd: 10, 20... (Untagged)">
+                                    </div>
+                                </div>
+
+                                <div class="step-nav-actions flex-between">
+                                    <button type="button" class="btn-step-prev" onclick="goToStep(2)">
+                                        <i data-lucide="chevron-left" class="btn-icon-sm"></i>
+                                        <span>Quay lại</span>
+                                    </button>
+                                    <button type="button" class="btn-step-next" onclick="goToStep(4)">
+                                        <span>Tiếp theo: Tùy Chọn & Scripts</span>
+                                        <i data-lucide="chevron-right" class="btn-icon-sm"></i>
+                                    </button>
+                                </div>
                             </div>
-                            <div class="form-group flex-1">
-                                <div class="label-with-value">
-                                    <label for="vlanTag">
-                                        <i data-lucide="split" class="field-icon"></i>
-                                        VLAN Tag
+                        </details>
+
+                        <!-- BƯỚC 4: TỰ ĐỘNG HÓA & TÙY CHỌN NÂNG CAO -->
+                        <details id="step4Details" class="form-step-details">
+                            <summary class="step-summary-header">
+                                <div class="step-badge-title" style="margin-bottom:0;">
+                                    <span class="step-num">4</span>
+                                    <span class="step-title">Tự Động Hóa & Tùy Chọn Nâng Cao</span>
+                                </div>
+                                <i data-lucide="chevron-down" class="accordion-chevron"></i>
+                            </summary>
+
+                            <div class="details-content-body">
+                                <div class="form-row" style="margin-top: 12px;">
+                                    <div class="form-group flex-1">
+                                        <label for="customTags">
+                                            <i data-lucide="tags" class="field-icon"></i>
+                                            Tags Phân Loại
+                                        </label>
+                                        <input type="text" id="customTags" name="tags" placeholder="vd: database, backend, k8s">
+                                    </div>
+                                    <div class="form-group flex-1">
+                                        <label for="cpuType">
+                                            <i data-lucide="cpu" class="field-icon"></i>
+                                            Kiến Trúc CPU
+                                        </label>
+                                        <select id="cpuType" name="cpuType">
+                                            <option value="host" selected>Host Passthrough (Tối ưu)</option>
+                                            <option value="x86-64-v2-AES">x86-64-v2-AES</option>
+                                            <option value="x86-64-v3">x86-64-v3 (AVX2)</option>
+                                            <option value="kvm64">KVM64</option>
+                                            <option value="qemu64">QEMU64</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="sshPublicKey">
+                                        <i data-lucide="key" class="field-icon"></i>
+                                        SSH Public Key (Root Passwordless)
                                     </label>
-                                    <span class="value-badge" id="vlanTagVal">Untagged</span>
+                                    <textarea id="sshPublicKey" name="sshPublicKey" rows="2" placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5..."></textarea>
                                 </div>
-                                <input type="number" id="vlanTag" name="vlanTag" min="1" max="4094" placeholder="vd: 10, 20... (Mặc định: Untagged)">
-                            </div>
-                        </div>
 
-                        <!-- Hardware Specs: vCPU, RAM, Disk Size (Input số trực tiếp & đồng bộ thanh trượt) -->
-                        <div class="form-row">
-                            <div class="form-group flex-1">
-                                <div class="label-with-value">
-                                    <label for="cores">
-                                        <i data-lucide="cpu" class="field-icon"></i>
-                                        vCPU (Cores)
+                                <!-- Post-provisioning Hooks & Cloud-Init User-Data -->
+                                <div class="form-group post-prov-box">
+                                    <div class="label-with-value">
+                                        <label for="userData">
+                                            <i data-lucide="code" class="field-icon"></i>
+                                            Script Cấu Hình Cloud-Init (User-Data)
+                                        </label>
+                                        <span class="badge-optional">Cloud-Init / Shell</span>
+                                    </div>
+                                    <div class="script-presets-bar">
+                                        <span class="presets-label">Mẫu:</span>
+                                        <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('debian')">🌀 Debian Root SSH</button>
+                                        <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('qemu')">🤖 QEMU Agent</button>
+                                        <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('docker')">🐳 Docker</button>
+                                        <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('nginx')">🌐 Nginx</button>
+                                        <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('security')">🛡️ UFW</button>
+                                        <button type="button" class="btn-preset-chip btn-preset-clear" onclick="applyScriptPreset('clear')">✕ Xóa</button>
+                                    </div>
+                                    <textarea id="userData" name="userData" rows="5" class="code-textarea" placeholder="#cloud-config hoặc script #!/bin/bash..."></textarea>
+                                </div>
+
+                                <div class="form-options" style="margin-bottom: 8px;">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="upgrade" name="upgrade" checked>
+                                        <span>Tự động cập nhật gói hệ thống (Package Upgrade)</span>
+                                    </label>
+                                    <label class="checkbox-label" style="margin-top: 8px;">
+                                        <input type="checkbox" id="protection" name="protection">
+                                        <span>Bật chế độ bảo vệ chống xóa (VM Protection Mode)</span>
                                     </label>
                                 </div>
-                                <div class="numeric-input-group">
-                                    <input type="number" id="cores" name="cores" min="1" max="128" value="2" step="1" required class="spec-number-input">
-                                    <span class="unit-suffix">vCPU</span>
+
+                                <div class="step-nav-actions flex-between">
+                                    <button type="button" class="btn-step-prev" onclick="goToStep(3)">
+                                        <i data-lucide="chevron-left" class="btn-icon-sm"></i>
+                                        <span>Quay lại Bước 3</span>
+                                    </button>
                                 </div>
-                                <input type="range" id="coresRange" min="1" max="32" value="2" step="1" class="spec-range-slider">
                             </div>
+                        </details>
 
-                            <div class="form-group flex-1">
-                                <div class="label-with-value">
-                                    <label for="memoryGb">
-                                        <i data-lucide="memory-stick" class="field-icon"></i>
-                                        Bộ nhớ RAM
-                                    </label>
-                                </div>
-                                <div class="numeric-input-group">
-                                    <input type="number" id="memoryGb" name="memoryGb" min="1" max="512" value="2" step="1" required class="spec-number-input">
-                                    <span class="unit-suffix">GB</span>
-                                </div>
-                                <input type="range" id="memoryGbRange" min="1" max="64" value="2" step="1" class="spec-range-slider">
-                            </div>
-
-                            <div class="form-group flex-1">
-                                <div class="label-with-value">
-                                    <label for="diskSizeGb">
-                                        <i data-lucide="database" class="field-icon"></i>
-                                        Ổ Đĩa OS
-                                    </label>
-                                </div>
-                                <div class="numeric-input-group">
-                                    <input type="number" id="diskSizeGb" name="diskSizeGb" min="5" max="2000" value="20" step="5" required class="spec-number-input">
-                                    <span class="unit-suffix">GB</span>
-                                </div>
-                                <input type="range" id="diskSizeGbRange" min="10" max="200" value="20" step="5" class="spec-range-slider">
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="sshPublicKey">
-                                <i data-lucide="key" class="field-icon"></i>
-                                SSH Public Key (Root Access)
-                            </label>
-                            <textarea id="sshPublicKey" name="sshPublicKey" rows="2" placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5..."></textarea>
-                        </div>
-
-                        <!-- Post-provisioning Hooks & Cloud-Init User-Data -->
-                        <div class="form-group post-prov-box">
-                            <div class="label-with-value">
-                                <label for="userData">
-                                    <i data-lucide="code" class="field-icon"></i>
-                                    Tự Động Cấu Hình Sau Khởi Tạo (Post-provisioning Hooks)
-                                </label>
-                                <span class="badge-optional">Cloud-Init / Shell</span>
-                            </div>
-                            <div class="script-presets-bar">
-                                <span class="presets-label">Mẫu sẵn có:</span>
-                                <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('debian')">🌀 Debian Root SSH & QEMU</button>
-                                <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('qemu')">🤖 QEMU Guest Agent</button>
-                                <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('docker')">🐳 Docker & Compose</button>
-                                <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('nginx')">🌐 Nginx Web Server</button>
-                                <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('security')">🛡️ Hardening & UFW</button>
-                                <button type="button" class="btn-preset-chip btn-preset-clear" onclick="applyScriptPreset('clear')">✕ Xóa</button>
-                            </div>
-                            <textarea id="userData" name="userData" rows="8" class="code-textarea" placeholder="# Nhập Cloud-init user-data YAML hoặc Shell script bootstrap...
-#cloud-config
-disable_root: false
-ssh_pwauth: true
-package_update: true
-packages:
-  - qemu-guest-agent
-  - sudo
-  - curl
-runcmd:
-  - sed -i -e '/^#*PermitRootLogin/c\PermitRootLogin prohibit-password' /etc/ssh/sshd_config
-  - systemctl restart sshd || systemctl restart ssh
-  - systemctl enable --now qemu-guest-agent"></textarea>
-                            <div class="field-hint">
-                                <i data-lucide="info" style="width:12px;height:12px;display:inline;"></i>
-                                <span>Hỗ trợ định dạng <code>#cloud-config</code> YAML hoặc Script <code>#!/bin/bash</code> tự chạy khi máy ảo boot lần đầu.</span>
-                            </div>
-                        </div>
-
-                        <div class="form-options">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="upgrade" name="upgrade" checked>
-                                <span>Tự động cập nhật gói hệ thống (Cloud-Init Package Upgrade)</span>
-                            </label>
-                            <label class="checkbox-label" style="margin-top: 8px;">
-                                <input type="checkbox" id="protection" name="protection">
-                                <span>Bật chế độ bảo vệ chống xóa (VM Protection Mode)</span>
-                            </label>
-                        </div>
-
-                        <button type="submit" id="btnSubmit" class="btn-primary">
+                        <button type="submit" id="btnSubmit" class="btn-primary" style="margin-top: 18px;">
                             <span class="spinner hidden"></span>
                             <span class="btn-text">Triển Khai VM</span>
                         </button>

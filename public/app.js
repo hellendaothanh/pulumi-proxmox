@@ -5,6 +5,30 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ==========================================
+    // STEPPED PROVISION FORM NAVIGATION WIZARD
+    // ==========================================
+    window.goToStep = (stepNumber) => {
+        const steps = [
+            document.getElementById("step1Details"),
+            document.getElementById("step2Details"),
+            document.getElementById("step3Details"),
+            document.getElementById("step4Details"),
+        ];
+
+        steps.forEach((step, index) => {
+            if (!step) return;
+            if (index + 1 === stepNumber) {
+                step.open = true;
+                step.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            } else {
+                step.open = false;
+            }
+        });
+
+        if (window.lucide) window.lucide.createIcons();
+    };
+
+    // ==========================================
     // RBAC ROLE MANAGEMENT & TAB SWITCHING
     // ==========================================
     const userRoleSelect = document.getElementById("userRoleSelect");
@@ -1439,6 +1463,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 <option value="local:iso/debian-12-cloud.img">local:iso/debian-12-cloud.img (Debian 12)</option>
             `;
         }
+
+        if (typeof updateStepSummaries === "function") {
+            updateStepSummaries();
+        }
     }
 
     if (nodeSelect) {
@@ -1853,6 +1881,147 @@ runcmd:
         }
     };
 
+    window.applyHardwarePreset = (cores, ramGb, diskGb) => {
+        const coresInput = document.getElementById("cores");
+        const coresRange = document.getElementById("coresRange");
+        const ramInput = document.getElementById("memoryGb");
+        const ramRange = document.getElementById("memoryGbRange");
+        const diskInput = document.getElementById("diskSizeGb");
+        const diskRange = document.getElementById("diskSizeGbRange");
+
+        if (coresInput) coresInput.value = cores;
+        if (coresRange) coresRange.value = cores;
+        if (ramInput) ramInput.value = ramGb;
+        if (ramRange) ramRange.value = ramGb;
+        if (diskInput) diskInput.value = diskGb;
+        if (diskRange) diskRange.value = diskGb;
+
+        // Cập nhật active class cho preset buttons
+        document.querySelectorAll(".btn-hw-preset").forEach(btn => {
+            const specText = btn.querySelector(".hw-preset-spec")?.textContent || "";
+            if (specText.includes(`${cores} vCPU`) && specText.includes(`${ramGb}GB`) && specText.includes(`${diskGb}GB`)) {
+                btn.classList.add("active");
+            } else {
+                btn.classList.remove("active");
+            }
+        });
+
+        showToast(`⚡ Đã áp dụng Template Phần Cứng: ${cores} vCPU · ${ramGb} GB RAM · ${diskGb} GB Disk!`);
+    };
+
+    // Hàm kiểm tra tính hợp lệ của Form và tự động mở đúng Step nếu thiếu dữ liệu
+    function validateCreateVmForm() {
+        // Xóa các highlight lỗi cũ
+        document.querySelectorAll(".input-field-error").forEach(el => el.classList.remove("input-field-error"));
+
+        const count = parseInt(document.getElementById("vmCount")?.value || "1");
+
+        // 1. Kiểm tra Bước 1: Tên máy ảo
+        const vmNameInput = document.getElementById("vmName");
+        if (!vmNameInput || !vmNameInput.value.trim()) {
+            goToStep(1);
+            vmNameInput?.classList.add("input-field-error");
+            setTimeout(() => {
+                vmNameInput?.scrollIntoView({ behavior: "smooth", block: "center" });
+                vmNameInput?.focus();
+            }, 100);
+            showToast("⚠️ Vui lòng nhập 'Tên Máy Ảo / Tiền Tố (VM Base Name)'!", "warning");
+            return false;
+        }
+
+        // 2. Kiểm tra Bước 2: Node & Storage & Image
+        if (count === 1) {
+            const nodeSelect = document.getElementById("nodeName");
+            if (!nodeSelect || !nodeSelect.value) {
+                goToStep(2);
+                nodeSelect?.classList.add("input-field-error");
+                setTimeout(() => {
+                    nodeSelect?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    nodeSelect?.focus();
+                }, 100);
+                showToast("⚠️ Vui lòng chọn 'Proxmox Node'!", "warning");
+                return false;
+            }
+
+            const datastoreSelect = document.getElementById("datastoreId");
+            if (!datastoreSelect || !datastoreSelect.value) {
+                goToStep(2);
+                datastoreSelect?.classList.add("input-field-error");
+                setTimeout(() => {
+                    datastoreSelect?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    datastoreSelect?.focus();
+                }, 100);
+                showToast("⚠️ Vui lòng chọn 'Ổ Lưu Trữ VM Disk'!", "warning");
+                return false;
+            }
+        } else {
+            // Cluster multi-node: phải chọn ít nhất 1 node
+            const checkedNodes = document.querySelectorAll("input[name='nodes']:checked");
+            if (checkedNodes.length === 0) {
+                goToStep(2);
+                showToast("⚠️ Vui lòng chọn ít nhất một Node để phân bổ Cluster!", "warning");
+                return false;
+            }
+        }
+
+        const diskImageSelect = document.getElementById("diskImageId");
+        if (!diskImageSelect || !diskImageSelect.value) {
+            goToStep(2);
+            diskImageSelect?.classList.add("input-field-error");
+            setTimeout(() => {
+                diskImageSelect?.scrollIntoView({ behavior: "smooth", block: "center" });
+                diskImageSelect?.focus();
+            }, 100);
+            showToast("⚠️ Vui lòng chọn 'Image Hệ Điều Hành (Cloud-Init / ISO)'!", "warning");
+            return false;
+        }
+
+        // 3. Kiểm tra Bước 3: vCPU, RAM, Disk Size
+        const coresInput = document.getElementById("cores");
+        if (!coresInput || !coresInput.value || parseInt(coresInput.value) < 1) {
+            goToStep(3);
+            coresInput?.classList.add("input-field-error");
+            setTimeout(() => {
+                coresInput?.scrollIntoView({ behavior: "smooth", block: "center" });
+                coresInput?.focus();
+            }, 100);
+            showToast("⚠️ Vui lòng cung cấp số lượng 'vCPU Cores' hợp lệ (>= 1)!", "warning");
+            return false;
+        }
+
+        const ramInput = document.getElementById("memoryGb");
+        if (!ramInput || !ramInput.value || parseInt(ramInput.value) < 1) {
+            goToStep(3);
+            ramInput?.classList.add("input-field-error");
+            setTimeout(() => {
+                ramInput?.scrollIntoView({ behavior: "smooth", block: "center" });
+                ramInput?.focus();
+            }, 100);
+            showToast("⚠️ Vui lòng cung cấp dung lượng 'RAM' hợp lệ (>= 1 GB)!", "warning");
+            return false;
+        }
+
+        const diskInput = document.getElementById("diskSizeGb");
+        if (!diskInput || !diskInput.value || parseInt(diskInput.value) < 5) {
+            goToStep(3);
+            diskInput?.classList.add("input-field-error");
+            setTimeout(() => {
+                diskInput?.scrollIntoView({ behavior: "smooth", block: "center" });
+                diskInput?.focus();
+            }, 100);
+            showToast("⚠️ Vui lòng cung cấp dung lượng 'Ổ Đĩa OS' hợp lệ (>= 5 GB)!", "warning");
+            return false;
+        }
+
+        return true;
+    }
+
+    // Xóa viền đỏ khi người dùng bắt đầu nhập liệu vào ô
+    document.querySelectorAll("#createVmForm input, #createVmForm select").forEach(el => {
+        el.addEventListener("input", () => el.classList.remove("input-field-error"));
+        el.addEventListener("change", () => el.classList.remove("input-field-error"));
+    });
+
     // Xử lý tạo VM mới
     const form = document.getElementById("createVmForm");
     const btnSubmit = document.getElementById("btnSubmit");
@@ -1861,6 +2030,11 @@ runcmd:
 
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
+
+        // Kiểm tra hợp lệ trước khi submit
+        if (!validateCreateVmForm()) {
+            return;
+        }
 
         const formData = new FormData(form);
         const count = parseInt(formData.get("vmCount")) || 1;
