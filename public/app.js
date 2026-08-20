@@ -3305,6 +3305,12 @@ runcmd:
         text = text.replace(/Tài khoản Viewer không có quyền xóa tài nguyên/i, "Viewer account is not permitted to delete resources");
         text = text.replace(/Chỉ có quyền xóa tài nguyên trên môi trường DEV/i, "Deletion is restricted to DEV environment only");
 
+        // VM Deletion & Lifecycle Patterns
+        text = text.replace(/Tiến hành hủy hoàn toàn VM và stack '([^']+)'\s*\(VM ID:\s*([^)]+)\)/i, "Permanently destroying VM and stack '$1' (VM ID: $2)");
+        text = text.replace(/Khởi tạo (\d+) máy ảo trên Node \[(.*)\]/i, "Provisioning $1 VM(s) on Node [$2]");
+        text = text.replace(/Viewer '([^']+)' bị chặn quyền xóa stack '([^']+)'\./i, "Viewer account '$1' denied permission to delete stack '$2'.");
+        text = text.replace(/Developer '([^']+)' bị từ chối xóa stack '([^']+)' trên môi trường '([^']+)'.\s*Chỉ Admin mới có quyền xóa tài nguyên STAGING\/PROD\./i, "Developer account '$1' denied permission to delete stack '$2' on '$3'. Only Admin can delete STAGING/PROD resources.");
+
         // Snapshots
         text = text.replace(/Tạo bản snapshot '([^']+)' cho VM #(\d+)/i, "Created snapshot '$1' for VM #$2");
         text = text.replace(/Khôi phục VM #(\d+) về snapshot '([^']+)'/i, "Rolled back VM #$1 to snapshot '$2'");
@@ -3641,17 +3647,19 @@ runcmd:
             });
             const result = await res.json();
             
+            const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
             if (result.success) {
-                showToast(`🗑️ Đang tiến hành hủy máy ảo thuộc stack '${stackName}'...`);
+                showToast(isEn ? `🗑️ Destroying virtual machines for stack '${stackName}'...` : `🗑️ Đang tiến hành hủy máy ảo thuộc stack '${stackName}'...`);
                 appendLog(`[Portal] ${result.message}`);
                 document.querySelector('.nav-tab[data-tab="tab-logs"]').click();
             } else {
-                showRbacAlert(`⛔ Không thể xóa: ${result.error}`);
+                showRbacAlert(isEn ? `⛔ Cannot delete: ${result.error}` : `⛔ Không thể xóa: ${result.error}`);
                 appendLog(`[Portal Error] ${result.error}`);
             }
             setTimeout(loadVms, 3000);
         } catch (err) {
-            showRbacAlert(`⛔ Lỗi kết nối: ${err.message}`);
+            const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
+            showRbacAlert(isEn ? `⛔ Connection error: ${err.message}` : `⛔ Lỗi kết nối: ${err.message}`);
             appendLog(`[Portal Error] ${err.message}`);
         }
     };

@@ -1122,11 +1122,11 @@ app.delete("/api/vms/:stackName", async (req, res) => {
             action: "DELETE_VM_DENIED",
             target: stackName,
             status: "DENIED",
-            details: `Viewer '${userName}' bị chặn quyền xóa stack '${stackName}'.`
+            details: `Viewer account '${userName}' denied permission to delete stack '${stackName}'.`
         });
         return res.status(403).json({
             success: false,
-            error: "[RBAC DENIED] Tài khoản Viewer không có quyền xóa máy ảo."
+            error: "[RBAC DENIED] Viewer account is not permitted to delete virtual machines."
         });
     }
 
@@ -1154,7 +1154,7 @@ app.delete("/api/vms/:stackName", async (req, res) => {
                 target: stackName,
                 environment: environment,
                 status: "DENIED",
-                details: `Developer '${userName}' bị từ chối xóa stack '${stackName}' trên môi trường '${environment.toUpperCase()}'. Chỉ Admin mới có quyền xóa tài nguyên STAGING/PROD.`
+                details: `Developer account '${userName}' denied permission to delete stack '${stackName}' on '${environment.toUpperCase()}'. Only Admin can delete STAGING/PROD resources.`
             });
             return res.status(403).json({
                 success: false,
@@ -1193,7 +1193,7 @@ app.delete("/api/vms/:stackName", async (req, res) => {
             target: stackName,
             environment: environment,
             status: "SUCCESS",
-            details: `Tiến hành hủy hoàn toàn VM và stack '${stackName}' (VM ID: ${vmId || 'N/A'})`
+            details: `Permanently destroying VM and stack '${stackName}' (VM ID: ${vmId || 'N/A'})`
         });
 
         const logHandler = createLogStreamHandler("Destroying");
