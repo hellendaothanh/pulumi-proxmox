@@ -131,6 +131,8 @@
 
             "wizard.step2.title": "Node, Lưu Trữ & Hệ Điều Hành",
             "wizard.step2.node": "Proxmox Node",
+            "wizard.step2.loading_nodes": "Đang tải danh sách Node từ API...",
+            "wizard.step2.choose_node_first": "Chọn Node trước...",
             "wizard.step2.datastore": "Ổ Lưu Trữ VM Disk",
             "wizard.step2.multi_node": "Phân Bổ Cụm Node (Round-Robin)",
             "wizard.step2.filter_all": "Tất Cả",
@@ -155,12 +157,16 @@
             "wizard.step3.add_disk": "+ Thêm Đĩa Phụ",
             "wizard.step3.secondary_hint": "💡 Bạn có thể gắn thêm các ổ đĩa dữ liệu phụ trên các Storage Pool khác nhau (ví dụ: OS trên NVMe/local-lvm, Data trên ZFS/HDD).",
             "wizard.step3.bridge": "Network Bridge",
+            "wizard.step3.bridge_default": "vmbr0 (Mặc định)",
             "wizard.step3.vlan": "VLAN Tag",
+            "wizard.step3.vlan_placeholder": "vd: 10, 20... (Untagged)",
             "wizard.step3.next": "Tiếp theo: Tùy Chọn & Scripts",
 
             "wizard.step4.title": "Tự Động Hóa & Tùy Chọn Nâng Cao",
             "wizard.step4.tags": "Tags Phân Loại",
+            "wizard.step4.tags_placeholder": "vd: database, backend, k8s",
             "wizard.step4.cpu_type": "Kiến Trúc CPU",
+            "wizard.step4.cpu_host_opt": "Host Passthrough (Tối ưu)",
             "wizard.step4.ssh_key": "SSH Public Key (Root Passwordless)",
             "wizard.step4.app_catalog_title": "Thư Viện Ứng Dụng Hoàn Chỉnh (1-Click App Catalog)",
             "wizard.step4.app_catalog_badge": "Tự động cài đặt & cấu hình",
@@ -200,7 +206,9 @@
             "stacks.table.ip": "Địa Chỉ IP",
             "stacks.table.status": "Trạng Thái",
             "stacks.table.actions": "Thao Tác",
+            "stacks.loading": "Đang tải danh sách máy ảo...",
             "stacks.empty": "Chưa có VM nào được triển khai qua Portal",
+            "stacks.waiting_agent": "Chờ Agent...",
 
             // Terminal Console (Tab 3)
             "logs.title": "Nhật Ký Triển Khai Pulumi Automation",
@@ -498,6 +506,8 @@
 
             "wizard.step2.title": "Node, Storage & OS Image",
             "wizard.step2.node": "Proxmox Node",
+            "wizard.step2.loading_nodes": "Loading Node list from API...",
+            "wizard.step2.choose_node_first": "Select Node first...",
             "wizard.step2.datastore": "Target VM Datastore",
             "wizard.step2.multi_node": "Multi-Node Distribution (Round-Robin)",
             "wizard.step2.filter_all": "All",
@@ -522,12 +532,16 @@
             "wizard.step3.add_disk": "+ Add Secondary Disk",
             "wizard.step3.secondary_hint": "💡 You can attach secondary data disks on different storage pools (e.g. OS on NVMe/local-lvm, Data on ZFS/HDD).",
             "wizard.step3.bridge": "Network Bridge",
+            "wizard.step3.bridge_default": "vmbr0 (Default)",
             "wizard.step3.vlan": "VLAN Tag",
+            "wizard.step3.vlan_placeholder": "e.g. 10, 20... (Untagged)",
             "wizard.step3.next": "Next: Options & Scripts",
 
             "wizard.step4.title": "Post-Provisioning Automation & Options",
             "wizard.step4.tags": "Classification Tags",
+            "wizard.step4.tags_placeholder": "e.g. database, backend, k8s",
             "wizard.step4.cpu_type": "CPU Architecture",
+            "wizard.step4.cpu_host_opt": "Host Passthrough (Optimized)",
             "wizard.step4.ssh_key": "SSH Public Key (Root Passwordless)",
             "wizard.step4.app_catalog_title": "1-Click Application Catalog",
             "wizard.step4.app_catalog_badge": "Automated install & configuration",
@@ -567,7 +581,9 @@
             "stacks.table.ip": "IP Address",
             "stacks.table.status": "Status",
             "stacks.table.actions": "Actions",
+            "stacks.loading": "Loading virtual machines list...",
             "stacks.empty": "No virtual machines deployed via Portal yet",
+            "stacks.waiting_agent": "Waiting for Agent...",
 
             // Terminal Console (Tab 3)
             "logs.title": "Pulumi Automation Deployment Logs",

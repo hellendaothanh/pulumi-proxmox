@@ -603,6 +603,7 @@ window.updateNodeSpecificFields = function() {
 
 window.validateCreateVmForm = function() {
     document.querySelectorAll(".input-field-error").forEach(el => el.classList.remove("input-field-error"));
+    const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
     const count = parseInt(document.getElementById("vmCount")?.value || "1");
 
     const vmNameInput = document.getElementById("vmName");
@@ -613,7 +614,7 @@ window.validateCreateVmForm = function() {
             vmNameInput?.scrollIntoView({ behavior: "smooth", block: "center" });
             vmNameInput?.focus();
         }, 100);
-        window.showToast("⚠️ Vui lòng nhập 'Tên Máy Ảo / Tiền Tố (VM Base Name)'!", "warning");
+        window.showToast(isEn ? "⚠️ Please enter 'VM / Instance Base Name'!" : "⚠️ Vui lòng nhập 'Tên Máy Ảo / Tiền Tố (VM Base Name)'!", "warning");
         return false;
     }
 
@@ -626,7 +627,7 @@ window.validateCreateVmForm = function() {
                 nodeSelect?.scrollIntoView({ behavior: "smooth", block: "center" });
                 nodeSelect?.focus();
             }, 100);
-            window.showToast("⚠️ Vui lòng chọn 'Proxmox Node'!", "warning");
+            window.showToast(isEn ? "⚠️ Please select a 'Proxmox Node'!" : "⚠️ Vui lòng chọn 'Proxmox Node'!", "warning");
             return false;
         }
 
@@ -638,14 +639,14 @@ window.validateCreateVmForm = function() {
                 datastoreSelect?.scrollIntoView({ behavior: "smooth", block: "center" });
                 datastoreSelect?.focus();
             }, 100);
-            window.showToast("⚠️ Vui lòng chọn 'Ổ Lưu Trữ VM Disk'!", "warning");
+            window.showToast(isEn ? "⚠️ Please select a 'Target VM Datastore'!" : "⚠️ Vui lòng chọn 'Ổ Lưu Trữ VM Disk'!", "warning");
             return false;
         }
     } else {
         const checkedNodes = document.querySelectorAll("input[name='clusterNodes']:checked");
         if (checkedNodes.length === 0) {
             window.goToStep(2);
-            window.showToast("⚠️ Vui lòng chọn ít nhất một Node để phân bổ Cluster!", "warning");
+            window.showToast(isEn ? "⚠️ Please select at least one Node for cluster distribution!" : "⚠️ Vui lòng chọn ít nhất một Node để phân bổ Cluster!", "warning");
             return false;
         }
     }
@@ -658,7 +659,7 @@ window.validateCreateVmForm = function() {
             diskImageSelect?.scrollIntoView({ behavior: "smooth", block: "center" });
             diskImageSelect?.focus();
         }, 100);
-        window.showToast("⚠️ Vui lòng chọn 'Image Hệ Điều Hành (Cloud-Init / ISO)'!", "warning");
+        window.showToast(isEn ? "⚠️ Please select an 'OS Image (Cloud-Init / ISO)'!" : "⚠️ Vui lòng chọn 'Image Hệ Điều Hành (Cloud-Init / ISO)'!", "warning");
         return false;
     }
 
@@ -670,7 +671,7 @@ window.validateCreateVmForm = function() {
             coresInput?.scrollIntoView({ behavior: "smooth", block: "center" });
             coresInput?.focus();
         }, 100);
-        window.showToast("⚠️ Vui lòng cung cấp số lượng 'vCPU Cores' hợp lệ (>= 1)!", "warning");
+        window.showToast(isEn ? "⚠️ Please specify valid 'vCPU Cores' (>= 1)!" : "⚠️ Vui lòng cung cấp số lượng 'vCPU Cores' hợp lệ (>= 1)!", "warning");
         return false;
     }
 
@@ -682,7 +683,7 @@ window.validateCreateVmForm = function() {
             ramInput?.scrollIntoView({ behavior: "smooth", block: "center" });
             ramInput?.focus();
         }, 100);
-        window.showToast("⚠️ Vui lòng cung cấp dung lượng 'RAM' hợp lệ (>= 1 GB)!", "warning");
+        window.showToast(isEn ? "⚠️ Please specify valid 'RAM' (>= 1 GB)!" : "⚠️ Vui lòng cung cấp dung lượng 'RAM' hợp lệ (>= 1 GB)!", "warning");
         return false;
     }
 
@@ -694,7 +695,7 @@ window.validateCreateVmForm = function() {
             diskInput?.scrollIntoView({ behavior: "smooth", block: "center" });
             diskInput?.focus();
         }, 100);
-        window.showToast("⚠️ Vui lòng cung cấp dung lượng 'Ổ Đĩa OS' hợp lệ (>= 5 GB)!", "warning");
+        window.showToast(isEn ? "⚠️ Please specify valid 'OS Disk' capacity (>= 5 GB)!" : "⚠️ Vui lòng cung cấp dung lượng 'Ổ Đĩa OS' hợp lệ (>= 5 GB)!", "warning");
         return false;
     }
 

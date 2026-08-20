@@ -21,7 +21,15 @@ window.loadVms = async function() {
                             <i data-lucide="copy" class="copy-icon-sm"></i>
                         </button>
                     `).join(" ") 
-                    : (vm.status === "Deployed" ? '<span class="text-muted" style="font-size:11.5px;">Chờ Agent...</span>' : '-');
+                const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
+                const vmIpBadges = vm.ips && vm.ips.length > 0 
+                    ? vm.ips.map(ip => `
+                        <button class="copy-chip-sm" onclick="copyToClipboard('${ip}', this)" title="${isEn ? 'Click to copy IP' : 'Click để sao chép IP'}">
+                            <span>${ip}</span>
+                            <i data-lucide="copy" class="copy-icon-sm"></i>
+                        </button>
+                    `).join(" ") 
+                    : (vm.status === "Deployed" ? `<span class="text-muted" style="font-size:11.5px;">${window.t ? window.t('stacks.waiting_agent') : (isEn ? 'Waiting for Agent...' : 'Chờ Agent...')}</span>` : '-');
 
                 const envBadge = window.renderEnvBadge ? window.renderEnvBadge(vm.environment) : (window.getEnvironmentTag ? window.getEnvironmentTag(vm.tags) : '');
                 const customTagsHtml = window.getCustomTags ? window.getCustomTags(vm.tags) : '';
@@ -31,7 +39,6 @@ window.loadVms = async function() {
                 const canDelete = role === "admin" || (role === "developer" && !isProdOrStag);
 
                 let actionCellHtml = "";
-                const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
                 const fwQuickBtn = (vm.vmId && vm.nodeName && role !== "viewer") ? `
                     <button class="btn-action-sm btn-action-hotplug" style="margin-right:4px;" onclick="openVmHotplug('${vm.nodeName}', ${vm.vmId}, '${vm.vmName}')" title="${window.t ? window.t('action.config_tooltip') : 'Cấu hình nóng'}">
                         <i data-lucide="cpu" class="btn-icon-sm"></i>
@@ -88,10 +95,12 @@ window.loadVms = async function() {
 
             if (window.lucide) window.lucide.createIcons();
         } else {
-            vmTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-muted">Chưa có VM nào được tạo qua Portal</td></tr>`;
+            const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
+            vmTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-muted">${window.t ? window.t('stacks.empty') : (isEn ? 'No virtual machines deployed via Portal yet' : 'Chưa có VM nào được tạo qua Portal')}</td></tr>`;
         }
     } catch (err) {
-        vmTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-error">Lỗi khi tải danh sách: ${err.message}</td></tr>`;
+        const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
+        vmTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-error">${isEn ? 'Error loading list: ' : 'Lỗi khi tải danh sách: '}${err.message}</td></tr>`;
     }
 };
 

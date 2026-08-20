@@ -274,7 +274,7 @@
                                                 <span class="required-star">*</span>
                                             </label>
                                             <select id="nodeName" name="nodeName" required>
-                                                <option value="" disabled selected>Đang tải danh sách Node từ API...</option>
+                                                <option value="" disabled selected data-i18n="wizard.step2.loading_nodes">Đang tải danh sách Node từ API...</option>
                                             </select>
                                             <div id="nodeInfoChip" style="margin-top: 4px;"></div>
                                         </div>
@@ -285,7 +285,7 @@
                                                 <span class="required-star">*</span>
                                             </label>
                                             <select id="datastoreId" name="datastoreId" required>
-                                                <option value="" disabled selected>Chọn Node trước...</option>
+                                                <option value="" disabled selected data-i18n="wizard.step2.choose_node_first">Chọn Node trước...</option>
                                             </select>
                                         </div>
                                     </div>
@@ -329,7 +329,7 @@
                                         <span class="required-star">*</span>
                                     </label>
                                     <select id="diskImageId" name="diskImageId" required>
-                                        <option value="" disabled selected>Chọn Node trước...</option>
+                                        <option value="" disabled selected data-i18n="wizard.step2.choose_node_first">Chọn Node trước...</option>
                                     </select>
                                 </div>
 
@@ -454,7 +454,7 @@
                                             <span data-i18n="wizard.step3.bridge">Network Bridge</span>
                                         </label>
                                         <select id="bridge" name="bridge">
-                                            <option value="vmbr0">vmbr0 (Mặc định)</option>
+                                            <option value="vmbr0" data-i18n="wizard.step3.bridge_default">vmbr0 (Mặc định)</option>
                                         </select>
                                     </div>
                                     <div class="form-group flex-1">
@@ -465,7 +465,7 @@
                                             </label>
                                             <span class="value-badge" id="vlanTagVal">Untagged</span>
                                         </div>
-                                        <input type="number" id="vlanTag" name="vlanTag" min="1" max="4094" placeholder="vd: 10, 20... (Untagged)">
+                                        <input type="number" id="vlanTag" name="vlanTag" min="1" max="4094" data-i18n-placeholder="wizard.step3.vlan_placeholder" placeholder="vd: 10, 20... (Untagged)">
                                     </div>
                                 </div>
 
@@ -499,7 +499,7 @@
                                             <i data-lucide="tags" class="field-icon"></i>
                                             <span data-i18n="wizard.step4.tags">Tags Phân Loại</span>
                                         </label>
-                                        <input type="text" id="customTags" name="tags" placeholder="vd: database, backend, k8s">
+                                        <input type="text" id="customTags" name="tags" data-i18n-placeholder="wizard.step4.tags_placeholder" placeholder="vd: database, backend, k8s">
                                     </div>
                                     <div class="form-group flex-1">
                                         <label for="cpuType">
@@ -507,7 +507,7 @@
                                             <span data-i18n="wizard.step4.cpu_type">Kiến Trúc CPU</span>
                                         </label>
                                         <select id="cpuType" name="cpuType">
-                                            <option value="host" selected>Host Passthrough (Tối ưu)</option>
+                                            <option value="host" selected data-i18n="wizard.step4.cpu_host_opt">Host Passthrough (Tối ưu)</option>
                                             <option value="x86-64-v2-AES">x86-64-v2-AES</option>
                                             <option value="x86-64-v3">x86-64-v3 (AVX2)</option>
                                             <option value="kvm64">KVM64</option>
@@ -645,7 +645,7 @@
                                 </thead>
                                 <tbody id="vmTableBody">
                                     <tr>
-                                        <td colspan="7" class="text-center text-muted">Đang tải danh sách máy ảo...</td>
+                                        <td colspan="7" class="text-center text-muted" data-i18n="stacks.loading">Đang tải danh sách máy ảo...</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -1552,20 +1552,20 @@
         <i data-lucide="chevron-up" class="btn-icon"></i>
     </button>
 
-    <script src="i18n.js?v=20260820-25"></script>
-    <script src="js/utils.js?v=20260820-25"></script>
-    <script src="js/state.js?v=20260820-25"></script>
-    <script src="js/auth.js?v=20260820-25"></script>
-    <script src="js/console.js?v=20260820-25"></script>
-    <script src="js/alerts.js?v=20260820-25"></script>
-    <script src="js/cluster.js?v=20260820-25"></script>
-    <script src="js/snapshots.js?v=20260820-25"></script>
-    <script src="js/firewall.js?v=20260820-25"></script>
-    <script src="js/hardware.js?v=20260820-25"></script>
-    <script src="js/wizard.js?v=20260820-25"></script>
-    <script src="js/vms.js?v=20260820-25"></script>
-    <script src="js/approvals.js?v=20260820-25"></script>
-    <script src="js/audit.js?v=20260820-25"></script>
-    <script src="js/main.js?v=20260820-25"></script>
+    <script src="i18n.js?v=20260820-26"></script>
+    <script src="js/utils.js?v=20260820-26"></script>
+    <script src="js/state.js?v=20260820-26"></script>
+    <script src="js/auth.js?v=20260820-26"></script>
+    <script src="js/console.js?v=20260820-26"></script>
+    <script src="js/alerts.js?v=20260820-26"></script>
+    <script src="js/cluster.js?v=20260820-26"></script>
+    <script src="js/snapshots.js?v=20260820-26"></script>
+    <script src="js/firewall.js?v=20260820-26"></script>
+    <script src="js/hardware.js?v=20260820-26"></script>
+    <script src="js/wizard.js?v=20260820-26"></script>
+    <script src="js/vms.js?v=20260820-26"></script>
+    <script src="js/approvals.js?v=20260820-26"></script>
+    <script src="js/audit.js?v=20260820-26"></script>
+    <script src="js/main.js?v=20260820-26"></script>
 </body>
 </html>
