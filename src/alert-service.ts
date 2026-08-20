@@ -137,7 +137,7 @@ class AlertService {
             this.ensureDataDir();
             fs.writeFileSync(this.historyPath, JSON.stringify(this.alertHistory.slice(0, 100), null, 2), "utf-8");
         } catch (e) {
-            console.error("[AlertService] Lỗi lưu alert-history.json:", e);
+            console.error("[AlertService] Error saving alert-history.json:", e);
         }
     }
 
@@ -154,14 +154,14 @@ class AlertService {
         }
 
         if (!this.thresholds.enabled) {
-            console.log("[AlertService] Cluster Alerting đang TẮT.");
+            console.log("[AlertService] Cluster Alerting is DISABLED.");
             return;
         }
 
         const intervalMs = Math.max(10, this.thresholds.checkIntervalSec || 30) * 1000;
-        console.log(`[AlertService] Khởi động giám sát tài nguyên cụm (chu kỳ: ${intervalMs / 1000}s)...`);
+        console.log(`[AlertService] Starting cluster resource monitoring (interval: ${intervalMs / 1000}s)...`);
 
-        // Quét ngay lần đầu sau 5 giây khởi động
+        // Initial scan after 5 seconds
         setTimeout(() => {
             this.checkClusterMetrics().catch(() => {});
         }, 5000);
@@ -262,7 +262,7 @@ class AlertService {
 
             return newlyTriggered;
         } catch (e: any) {
-            console.error("[AlertService] Lỗi khi quét tài nguyên cụm:", e.message);
+            console.error("[AlertService] Error scanning cluster resources:", e.message);
             return [];
         }
     }
@@ -402,7 +402,7 @@ class AlertService {
             const data: any = await res.json();
             return !!data.ok;
         } catch (e: any) {
-            console.error("[AlertService] Lỗi gửi Telegram:", e.message);
+            console.error("[AlertService] Error sending Telegram message:", e.message);
             return false;
         }
     }
@@ -413,7 +413,7 @@ class AlertService {
             if (!webhookUrl) return false;
 
             const color = isResolved ? 0x22c55e : (alert.severity === "CRITICAL" ? 0xef4444 : 0xf59e0b);
-            const title = isResolved ? `✅ [ĐÃ PHỤC HỒI] ${alert.title}` : `🚨 [CẢNH BÁO TÀI NGUYÊN] ${alert.title}`;
+            const title = isResolved ? `✅ [RESOLVED] ${alert.title}` : `🚨 [CLUSTER ALERT] ${alert.title}`;
 
             // Discord / Slack compatible payload
             const payload: any = {
@@ -426,11 +426,11 @@ class AlertService {
                         color: color,
                         fields: [
                             { name: "Node", value: alert.node, inline: true },
-                            { name: "Tài nguyên", value: alert.resourceName, inline: true },
-                            { name: "Mức hiện tại", value: `${alert.currentValue}${alert.unit}`, inline: true },
-                            { name: "Ngưỡng cảnh báo", value: `${alert.thresholdValue}${alert.unit}`, inline: true },
-                            { name: "Trạng thái", value: isResolved ? "RESOLVED" : alert.status, inline: true },
-                            { name: "Thời gian", value: new Date().toLocaleString("vi-VN"), inline: true },
+                            { name: "Resource", value: alert.resourceName, inline: true },
+                            { name: "Current Value", value: `${alert.currentValue}${alert.unit}`, inline: true },
+                            { name: "Threshold", value: `${alert.thresholdValue}${alert.unit}`, inline: true },
+                            { name: "Status", value: isResolved ? "RESOLVED" : alert.status, inline: true },
+                            { name: "Timestamp", value: new Date().toLocaleString("en-US"), inline: true },
                         ],
                         footer: { text: "Proxmox Cluster Explorer & Pulumi IaC Platform" },
                         timestamp: new Date().toISOString(),
@@ -447,7 +447,7 @@ class AlertService {
 
             return res.ok;
         } catch (e: any) {
-            console.error("[AlertService] Lỗi gửi Webhook:", e.message);
+            console.error("[AlertService] Error sending Webhook payload:", e.message);
             return false;
         }
     }
@@ -457,8 +457,8 @@ class AlertService {
             id: `test_${Date.now()}`,
             type: "STORAGE_HIGH",
             severity: "WARNING",
-            title: "🔔 [TEST] Thông Báo Thử Nghiệm Từ Proxmox Alert Engine",
-            message: "Đây là thông báo thử nghiệm nhằm xác minh kênh Telegram Bot và Webhook hoạt động chính xác.",
+            title: "🔔 [TEST] Test Notification from Proxmox Alert Engine",
+            message: "This is a test notification verifying that Telegram Bot and Webhook channels are configured and operating properly.",
             node: "pve-node01",
             resourceName: "local-lvm (Storage Pool)",
             currentValue: 88.5,
@@ -470,7 +470,6 @@ class AlertService {
 
         let telegramSuccess = false;
         let webhookSuccess = false;
-
         if (this.thresholds.telegramBotToken && this.thresholds.telegramChatId) {
             telegramSuccess = await this.sendTelegramMessage(testAlert, false);
         }
@@ -480,7 +479,7 @@ class AlertService {
         }
 
         if (this.logBroadcastCallback) {
-            this.logBroadcastCallback(`[Cluster Alert] 🔔 Đã gửi Test Alert tới ${telegramSuccess ? 'Telegram (OK)' : 'Telegram (N/A)'} | ${webhookSuccess ? 'Webhook (OK)' : 'Webhook (N/A)'}`);
+            this.logBroadcastCallback(`[Cluster Alert] 🔔 Sent Test Alert to ${telegramSuccess ? 'Telegram (OK)' : 'Telegram (N/A)'} | ${webhookSuccess ? 'Webhook (OK)' : 'Webhook (N/A)'}`);
         }
 
         return {

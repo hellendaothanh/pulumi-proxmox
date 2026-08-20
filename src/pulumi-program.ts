@@ -1,36 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as proxmox from "@muhlba91/pulumi-proxmoxve";
-
-export interface VmConfig {
-    name: string;
-    nodeName: string;
-    resourceType?: "qemu" | "lxc"; // "qemu" (VM) hoặc "lxc" (Container)
-    description?: string;
-    cores: number;
-    memoryMb: number;
-    diskSizeGb: number;
-    datastoreId?: string; // e.g. "local-lvm", "zfs-storage"
-    diskImageId: string; // e.g. "local:iso/rocky-9-cloud.img" hoặc "local:vztmpl/ubuntu-22.04-standard.tar.zst"
-    sshUser?: string;
-    sshPublicKey?: string;
-    password?: string; // Root password cho LXC
-    bridge?: string;
-    vlanTag?: number; // Optional VLAN ID (1-4094)
-    cpuType?: string; // e.g. "host", "x86-64-v2-AES", "x86-64-v3", "kvm64"
-    environment?: "dev" | "stag" | "pro" | string;
-    tags?: string[];
-    upgrade?: boolean;
-    protection?: boolean;
-    userData?: string; // Custom Cloud-init User-Data Script / Post-provisioning Bootstrap
-    unprivileged?: boolean; // LXC Unprivileged Container
-    secondaryDisks?: Array<{
-        name?: string;
-        datastoreId: string;
-        sizeGb: number;
-        interface?: string;
-        discard?: string;
-    }>;
-}
+import { VmConfig } from "./types";
+export { VmConfig };
 
 export function createVmProgram(config: VmConfig) {
     return async () => {
@@ -74,7 +45,7 @@ export function createVmProgram(config: VmConfig) {
         if (config.resourceType === "lxc") {
             // Xác định loại OS cho LXC (ubuntu, debian, alpine, centos, rocky, etc.)
             let osType = "unmanaged";
-            const imgLower = config.diskImageId.toLowerCase();
+            const imgLower = (config.diskImageId || "").toLowerCase();
             if (imgLower.includes("ubuntu")) osType = "ubuntu";
             else if (imgLower.includes("debian")) osType = "debian";
             else if (imgLower.includes("alpine")) osType = "alpine";
@@ -91,18 +62,18 @@ export function createVmProgram(config: VmConfig) {
                     nesting: true,
                 },
                 cpu: {
-                    cores: config.cores,
+                    cores: config.cores || 2,
                 },
                 memory: {
-                    dedicated: config.memoryMb,
+                    dedicated: config.memoryMb || 2048,
                     swap: 512,
                 },
                 disk: {
                     datastoreId: targetDatastore,
-                    size: config.diskSizeGb,
+                    size: config.diskSizeGb || 20,
                 },
                 operatingSystem: {
-                    templateFileId: config.diskImageId,
+                    templateFileId: config.diskImageId || "",
                     type: osType,
                 },
                 initialization: {
@@ -191,20 +162,20 @@ export function createVmProgram(config: VmConfig) {
             tags: combinedTags.length > 0 ? combinedTags : undefined,
             hotplug: "network,disk,usb,memory,cpu",
             cpu: {
-                cores: config.cores,
+                cores: config.cores || 2,
                 type: config.cpuType || "host",
                 numa: true,
             },
             memory: {
-                dedicated: config.memoryMb,
+                dedicated: config.memoryMb || 2048,
             },
             disks: (() => {
                 const diskList: any[] = [
                     {
                         datastoreId: targetDatastore,
                         interface: "scsi0",
-                        fileId: config.diskImageId,
-                        size: config.diskSizeGb,
+                        fileId: config.diskImageId || "",
+                        size: config.diskSizeGb || 20,
                         discard: "on",
                     },
                 ];
@@ -212,10 +183,10 @@ export function createVmProgram(config: VmConfig) {
                 if (Array.isArray(config.secondaryDisks) && config.secondaryDisks.length > 0) {
                     config.secondaryDisks.forEach((sec, idx) => {
                         diskList.push({
-                            datastoreId: sec.datastoreId || targetDatastore,
-                            interface: sec.interface || `scsi${idx + 1}`,
+                            datastoreId: sec.datastoreId || sec.storage || targetDatastore,
+                            interface: sec.interface || sec.slot || `scsi${idx + 1}`,
                             size: sec.sizeGb,
-                            discard: sec.discard || "on",
+                            discard: typeof sec.discard === "boolean" ? (sec.discard ? "on" : "ignore") : (sec.discard || "on"),
                         });
                     });
                 }
