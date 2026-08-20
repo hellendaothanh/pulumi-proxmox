@@ -10,6 +10,20 @@
     "currentValue": 88.6,
     "thresholdValue": 85,
     "unit": "%",
+    "timestamp": "2026-08-20T01:16:35.475Z",
+    "status": "ACTIVE"
+  },
+  {
+    "id": "storage_node06_zfs-storage",
+    "type": "STORAGE_HIGH",
+    "severity": "WARNING",
+    "title": "💾 Storage Pool 'zfs-storage' (node06) vượt ngưỡng (88.6%)",
+    "message": "Ổ đĩa/Pool lưu trữ 'zfs-storage' trên node 'node06' đã đầy 88.6%, vượt ngưỡng cho phép 85%. Khuyến nghị dọn dẹp Snapshot cũ hoặc mở rộng LUN/ZFS!",
+    "node": "node06",
+    "resourceName": "zfs-storage (zfspool)",
+    "currentValue": 88.6,
+    "thresholdValue": 85,
+    "unit": "%",
     "timestamp": "2026-08-19T10:25:02.149Z",
     "status": "ACTIVE"
   },

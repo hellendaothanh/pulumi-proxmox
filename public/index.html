@@ -27,24 +27,24 @@
 
             <!-- Tabs Navigation -->
             <div class="nav-tabs">
-                <button class="nav-tab active" data-tab="tab-overview">
+                <button class="nav-tab active" data-tab="tab-overview" data-i18n="nav.cluster">
                     <i data-lucide="activity" class="btn-icon-sm"></i>
                     <span>Tài Nguyên Cụm</span>
                 </button>
-                <button class="nav-tab" data-tab="tab-deploy">
+                <button class="nav-tab" data-tab="tab-deploy" data-i18n="nav.create">
                     <i data-lucide="plus-circle" class="btn-icon-sm"></i>
                     <span>Khởi Tạo VM</span>
                 </button>
-                <button class="nav-tab" data-tab="tab-logs">
+                <button class="nav-tab" data-tab="tab-logs" data-i18n="nav.logs">
                     <i data-lucide="terminal" class="btn-icon-sm"></i>
                     <span>Live Console</span>
                 </button>
-                <button class="nav-tab" data-tab="tab-approvals">
+                <button class="nav-tab" data-tab="tab-approvals" data-i18n="nav.approvals">
                     <i data-lucide="check-square" class="btn-icon-sm"></i>
                     <span>Phê Duyệt & Quota</span>
                     <span id="approvalBadgeCount" class="badge-count hidden">0</span>
                 </button>
-                <button class="nav-tab" data-tab="tab-audit">
+                <button class="nav-tab" data-tab="tab-audit" data-i18n="nav.audit">
                     <i data-lucide="shield-check" class="btn-icon-sm"></i>
                     <span>Audit Logs</span>
                 </button>
@@ -63,14 +63,31 @@
                     </div>
                 </div>
                 <div class="user-action-buttons">
-                    <button id="btnOpenAlertsModal" class="btn-icon-action btn-alert-bell" title="Trung tâm Cảnh Báo Ngưỡng Tài Nguyên (Cluster Alerting)">
+                    <!-- Language Switcher Dropdown -->
+                    <div class="lang-switcher-wrapper">
+                        <button type="button" id="btnLangCurrent" class="btn-lang-switcher" onclick="toggleLangDropdown(event)" title="Chuyển đổi ngôn ngữ / Switch Language">
+                            <span class="flag-icon">🇻🇳</span>
+                            <span class="lang-text">VI</span>
+                            <i data-lucide="chevron-down" class="lang-chevron"></i>
+                        </button>
+                        <div id="langDropdownMenu" class="lang-dropdown-menu">
+                            <button type="button" class="lang-item active" data-lang="vi" onclick="setLanguage('vi')">
+                                <span>🇻🇳</span> <span>Tiếng Việt</span>
+                            </button>
+                            <button type="button" class="lang-item" data-lang="en" onclick="setLanguage('en')">
+                                <span>🇬🇧</span> <span>English</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button id="btnOpenAlertsModal" class="btn-icon-action btn-alert-bell" data-i18n-title="header.alerts" title="Trung tâm Cảnh Báo Ngưỡng Tài Nguyên (Cluster Alerting)">
                         <i data-lucide="bell" class="btn-icon-sm"></i>
                         <span id="headerAlertBadgeCount" class="alert-pulse-badge hidden">0</span>
                     </button>
-                    <button id="btnChangePasswordModal" class="btn-icon-action" title="Đổi mật khẩu tài khoản">
+                    <button id="btnChangePasswordModal" class="btn-icon-action" data-i18n-title="header.change_password" title="Đổi mật khẩu tài khoản">
                         <i data-lucide="key" class="btn-icon-sm"></i>
                     </button>
-                    <button id="btnLogout" class="btn-icon-action btn-logout" title="Đăng xuất khỏi hệ thống">
+                    <button id="btnLogout" class="btn-icon-action btn-logout" data-i18n-title="header.logout" title="Đăng xuất khỏi hệ thống">
                         <i data-lucide="log-out" class="btn-icon-sm"></i>
                     </button>
                 </div>
@@ -93,11 +110,11 @@
                 </div>
             </div>
             <div class="alert-banner-actions">
-                <button id="btnBannerViewAlerts" class="btn-banner-action">
+                <button id="btnBannerViewAlerts" class="btn-banner-action" data-i18n="alert.banner_btn">
                     <i data-lucide="sliders" class="btn-icon-xs"></i>
                     <span>Chi Tiết & Cấu Hình</span>
                 </button>
-                <button id="btnDismissAlertBanner" class="btn-banner-dismiss" title="Tạm đóng banner">
+                <button id="btnDismissAlertBanner" class="btn-banner-dismiss" data-i18n-title="alert.banner_dismiss" title="Tạm đóng banner">
                     <i data-lucide="x" class="btn-icon-xs"></i>
                 </button>
             </div>
@@ -107,18 +124,18 @@
         <section id="tab-overview" class="tab-content active">
             <div class="section-top-actions">
                 <div class="section-title">
-                    <h2>Tổng Quan Tài Nguyên Hạ Tầng</h2>
-                    <p>Theo dõi thời gian thực về Node IP, Local & LVM & ZFS Storage, ISO Images và danh sách toàn bộ VM</p>
+                    <h2 data-i18n="cluster.title">Tổng Quan Tài Nguyên Hạ Tầng</h2>
+                    <p data-i18n="cluster.subtitle">Theo dõi thời gian thực về Node IP, Local & LVM & ZFS Storage, ISO Images và danh sách toàn bộ VM</p>
                 </div>
                 <div class="overview-toolbar">
                     <div class="search-input-wrapper">
                         <i data-lucide="search" class="search-icon"></i>
-                        <input type="text" id="vmSearchInput" class="search-input" placeholder="Tìm kiếm VM (Tên, ID, IP, Tag, Node)...">
+                        <input type="text" id="vmSearchInput" class="search-input" data-i18n-placeholder="cluster.search_placeholder" placeholder="Tìm kiếm VM (Tên, ID, IP, Tag, Node)...">
                         <button id="btnClearSearch" class="btn-clear-search hidden" title="Xóa tìm kiếm">
                             <i data-lucide="x" style="width:14px;height:14px;"></i>
                         </button>
                     </div>
-                    <button id="btnRefreshResources" class="btn-secondary">
+                    <button id="btnRefreshResources" class="btn-secondary" data-i18n="cluster.refresh_btn">
                         <i data-lucide="refresh-cw" class="btn-icon-sm"></i>
                         <span>Cập Nhật Dữ Liệu</span>
                     </button>
@@ -142,9 +159,9 @@
                     <div class="card-header">
                         <div class="card-title-group">
                             <i data-lucide="plus-circle" class="icon-accent"></i>
-                            <h2>Khởi Tạo Máy Ảo Mới</h2>
+                            <h2 data-i18n="wizard.title">Khởi Tạo Máy Ảo Mới</h2>
                         </div>
-                        <p>Cấu hình tài nguyên và tự động provision qua Pulumi Engine</p>
+                        <p data-i18n="wizard.subtitle">Cấu hình tài nguyên và tự động provision qua Pulumi Engine</p>
                     </div>
 
                     <form id="createVmForm" class="stepped-provision-form" novalidate>
@@ -153,7 +170,7 @@
                             <summary class="step-summary-header">
                                 <div class="step-badge-title" style="margin-bottom:0;">
                                     <span class="step-num">1</span>
-                                    <span class="step-title">Thông Tin Cơ Bản & Môi Trường</span>
+                                    <span class="step-title" data-i18n="wizard.step1.title">Thông Tin Cơ Bản & Môi Trường</span>
                                 </div>
                                 <i data-lucide="chevron-down" class="accordion-chevron"></i>
                             </summary>
@@ -163,7 +180,7 @@
                                 <div class="form-group" style="margin-top: 12px; margin-bottom: 12px;">
                                     <label>
                                         <i data-lucide="box" class="field-icon"></i>
-                                        <span>Loại Tài Nguyên Triển Khai (Workload Type)</span>
+                                        <span data-i18n="wizard.step1.workload_type">Loại Tài Nguyên Triển Khai (Workload Type)</span>
                                     </label>
                                     <div class="env-selector-grid" style="grid-template-columns: 1fr 1fr;">
                                         <label class="env-radio-card env-card-qemu active" id="cardTypeQemu">
@@ -171,7 +188,7 @@
                                             <i data-lucide="server" class="env-indicator-icon"></i>
                                             <div>
                                                 <strong style="display:block; font-size:13px; color:#fff;">QEMU Virtual Machine</strong>
-                                                <small style="font-size:11px; color:#94a3b8;">Hệ điều hành đầy đủ, Kernel riêng, Cloud-Init</small>
+                                                <small style="font-size:11px; color:#94a3b8;" data-i18n="wizard.step1.qemu_desc">Hệ điều hành đầy đủ, Kernel riêng, Cloud-Init</small>
                                             </div>
                                         </label>
                                         <label class="env-radio-card env-card-lxc" id="cardTypeLxc">
@@ -179,7 +196,7 @@
                                             <i data-lucide="box" class="env-indicator-icon"></i>
                                             <div>
                                                 <strong style="display:block; font-size:13px; color:#fff;">LXC Container</strong>
-                                                <small style="font-size:11px; color:#94a3b8;">Siêu nhẹ, khởi động tức thì, tiết kiệm RAM/CPU</small>
+                                                <small style="font-size:11px; color:#94a3b8;" data-i18n="wizard.step1.lxc_desc">Siêu nhẹ, khởi động tức thì, tiết kiệm RAM/CPU</small>
                                             </div>
                                         </label>
                                     </div>
@@ -189,16 +206,16 @@
                                     <div class="form-group flex-2">
                                         <label for="vmName">
                                             <i data-lucide="tag" class="field-icon"></i>
-                                            <span id="instanceNameLabel">Tên Máy Ảo / Tiền Tố (Instance Base Name)</span>
+                                            <span id="instanceNameLabel" data-i18n="wizard.step1.vm_name">Tên Máy Ảo / Tiền Tố (Instance Base Name)</span>
                                             <span class="required-star">*</span>
                                         </label>
-                                        <input type="text" id="vmName" name="name" placeholder="vd: ubuntu-server, db-master, redis-node..." required>
+                                        <input type="text" id="vmName" name="name" data-i18n-placeholder="wizard.step1.vm_name_placeholder" placeholder="vd: ubuntu-server, db-master, redis-node..." required>
                                     </div>
                                     <div class="form-group flex-1">
                                         <div class="label-with-value">
                                             <label for="vmCount">
                                                 <i data-lucide="copy-plus" class="field-icon"></i>
-                                                <span>Số Lượng</span>
+                                                <span data-i18n="wizard.step1.count">Số Lượng</span>
                                             </label>
                                             <span class="value-badge" id="vmCountVal">1 VM</span>
                                         </div>
@@ -228,7 +245,7 @@
                                 </div>
 
                                 <div class="step-nav-actions">
-                                    <button type="button" class="btn-step-next" onclick="goToStep(2)">
+                                    <button type="button" class="btn-step-next" onclick="goToStep(2)" data-i18n="wizard.step1.next">
                                         <span>Tiếp theo: Chọn Node & Image</span>
                                         <i data-lucide="chevron-right" class="btn-icon-sm"></i>
                                     </button>
@@ -241,7 +258,7 @@
                             <summary class="step-summary-header">
                                 <div class="step-badge-title" style="margin-bottom:0;">
                                     <span class="step-num">2</span>
-                                    <span class="step-title">Node, Lưu Trữ & Hệ Điều Hành</span>
+                                    <span class="step-title" data-i18n="wizard.step2.title">Node, Lưu Trữ & Hệ Điều Hành</span>
                                 </div>
                                 <i data-lucide="chevron-down" class="accordion-chevron"></i>
                             </summary>
@@ -253,7 +270,7 @@
                                         <div class="form-group flex-1">
                                             <label for="nodeName">
                                                 <i data-lucide="hard-drive" class="field-icon"></i>
-                                                <span>Proxmox Node</span>
+                                                <span data-i18n="wizard.step2.node">Proxmox Node</span>
                                                 <span class="required-star">*</span>
                                             </label>
                                             <select id="nodeName" name="nodeName" required>
@@ -264,7 +281,7 @@
                                         <div class="form-group flex-1">
                                             <label for="datastoreId">
                                                 <i data-lucide="database" class="field-icon"></i>
-                                                <span>Ổ Lưu Trữ VM Disk</span>
+                                                <span data-i18n="wizard.step2.datastore">Ổ Lưu Trữ VM Disk</span>
                                                 <span class="required-star">*</span>
                                             </label>
                                             <select id="datastoreId" name="datastoreId" required>
@@ -281,12 +298,12 @@
                                     <div class="label-with-value">
                                         <label>
                                             <i data-lucide="network" class="field-icon"></i>
-                                            <span>Phân Bổ Cụm Node (Round-Robin)</span>
+                                            <span data-i18n="wizard.step2.multi_node">Phân Bổ Cụm Node (Round-Robin)</span>
                                             <span class="required-star">*</span>
                                         </label>
                                     </div>
                                     <div class="node-filter-tabs">
-                                        <button type="button" class="node-filter-btn active" data-filter="all">Tất Cả</button>
+                                        <button type="button" class="node-filter-btn active" data-filter="all" data-i18n="wizard.step2.filter_all">Tất Cả</button>
                                     </div>
                                     <div id="nodesCheckboxContainer" class="nodes-checkbox-grid">
                                         <!-- Rendered dynamically -->
@@ -297,7 +314,7 @@
                                 <div id="vmClusterPreview" class="cluster-preview-box hidden">
                                     <div class="preview-header">
                                         <i data-lucide="layers" class="icon-accent-sm"></i>
-                                        <span id="previewHeaderTitle">Xem trước danh sách phân bổ máy ảo:</span>
+                                        <span id="previewHeaderTitle" data-i18n="wizard.step2.preview_title">Xem trước danh sách phân bổ máy ảo:</span>
                                     </div>
                                     <div id="previewList" class="preview-items-list">
                                         <!-- Rendered dynamically -->
@@ -308,7 +325,7 @@
                                 <div class="form-group" style="margin-bottom: 8px;">
                                     <label for="diskImageId">
                                         <i data-lucide="disc" class="field-icon"></i>
-                                        <span>Image Hệ Điều Hành (Cloud-Init / ISO)</span>
+                                        <span data-i18n="wizard.step2.os_image">Image Hệ Điều Hành (Cloud-Init / ISO)</span>
                                         <span class="required-star">*</span>
                                     </label>
                                     <select id="diskImageId" name="diskImageId" required>
@@ -317,11 +334,11 @@
                                 </div>
 
                                 <div class="step-nav-actions flex-between">
-                                    <button type="button" class="btn-step-prev" onclick="goToStep(1)">
+                                    <button type="button" class="btn-step-prev" onclick="goToStep(1)" data-i18n="wizard.nav.back">
                                         <i data-lucide="chevron-left" class="btn-icon-sm"></i>
                                         <span>Quay lại</span>
                                     </button>
-                                    <button type="button" class="btn-step-next" onclick="goToStep(3)">
+                                    <button type="button" class="btn-step-next" onclick="goToStep(3)" data-i18n="wizard.step2.next">
                                         <span>Tiếp theo: Phần Cứng & Mạng</span>
                                         <i data-lucide="chevron-right" class="btn-icon-sm"></i>
                                     </button>
@@ -334,7 +351,7 @@
                             <summary class="step-summary-header">
                                 <div class="step-badge-title" style="margin-bottom:0;">
                                     <span class="step-num">3</span>
-                                    <span class="step-title">Tài Nguyên Phần Cứng & Mạng</span>
+                                    <span class="step-title" data-i18n="wizard.step3.title">Tài Nguyên Phần Cứng & Mạng</span>
                                 </div>
                                 <i data-lucide="chevron-down" class="accordion-chevron"></i>
                             </summary>
@@ -344,7 +361,7 @@
                                 <div class="hw-presets-wrapper" style="margin-top: 12px; margin-bottom: 12px;">
                                     <div class="hw-presets-label">
                                         <i data-lucide="sliders" class="field-icon"></i>
-                                        <span>Mẫu cấu hình nhanh (Hardware Templates):</span>
+                                        <span data-i18n="wizard.step3.templates_title">Mẫu cấu hình nhanh (Hardware Templates):</span>
                                     </div>
                                     <div class="hw-presets-grid">
                                         <button type="button" class="btn-hw-preset" onclick="applyHardwarePreset(1, 1, 15)">
@@ -375,7 +392,7 @@
                                     <div class="form-group flex-1">
                                         <label for="cores">
                                             <i data-lucide="cpu" class="field-icon"></i>
-                                            <span>vCPU Cores</span>
+                                            <span data-i18n="wizard.step3.cpu_cores">vCPU Cores</span>
                                             <span class="required-star">*</span>
                                         </label>
                                         <div class="numeric-input-group">
@@ -388,7 +405,7 @@
                                     <div class="form-group flex-1">
                                         <label for="memoryGb">
                                             <i data-lucide="memory-stick" class="field-icon"></i>
-                                            <span>RAM (GB)</span>
+                                            <span data-i18n="wizard.step3.ram_gb">RAM (GB)</span>
                                             <span class="required-star">*</span>
                                         </label>
                                         <div class="numeric-input-group">
@@ -401,7 +418,7 @@
                                     <div class="form-group flex-1">
                                         <label for="diskSizeGb">
                                             <i data-lucide="database" class="field-icon"></i>
-                                            <span>Ổ Đĩa OS</span>
+                                            <span data-i18n="wizard.step3.os_disk">Ổ Đĩa OS</span>
                                             <span class="required-star">*</span>
                                         </label>
                                         <div class="numeric-input-group">
@@ -417,9 +434,9 @@
                                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
                                         <div style="display:flex; align-items:center; gap:6px;">
                                             <i data-lucide="layers" class="field-icon" style="color:#38bdf8;"></i>
-                                            <strong style="font-size:12.5px; color:#f8fafc;">Ổ Đĩa Phụ Mở Rộng (Secondary Disks):</strong>
+                                            <strong style="font-size:12.5px; color:#f8fafc;" data-i18n="wizard.step3.sec_disks_title">Ổ Đĩa Phụ Mở Rộng (Secondary Disks):</strong>
                                         </div>
-                                        <button type="button" id="btnAddSecondaryDisk" class="btn-secondary" style="padding: 4px 10px; font-size: 11.5px;">
+                                        <button type="button" id="btnAddSecondaryDisk" class="btn-secondary" style="padding: 4px 10px; font-size: 11.5px;" data-i18n="wizard.step3.add_disk_btn">
                                             <i data-lucide="plus" class="btn-icon-xs"></i>
                                             <span>+ Thêm Đĩa Phụ</span>
                                         </button>
@@ -427,9 +444,6 @@
                                     <div id="secondaryDisksContainer" class="secondary-disks-list">
                                         <!-- Dynamic secondary disk rows -->
                                     </div>
-                                    <small class="text-muted" style="font-size:11px; display:block; margin-top:4px;">
-                                        💡 Bạn có thể gắn thêm các ổ đĩa dữ liệu phụ trên các Storage Pool khác nhau (ví dụ: OS trên NVMe/local-lvm, Data trên ZFS/HDD).
-                                    </small>
                                 </div>
 
                                 <!-- Network & VLAN Settings -->
@@ -437,7 +451,7 @@
                                     <div class="form-group flex-1">
                                         <label for="bridge">
                                             <i data-lucide="network" class="field-icon"></i>
-                                            Network Bridge
+                                            <span data-i18n="wizard.step3.bridge">Network Bridge</span>
                                         </label>
                                         <select id="bridge" name="bridge">
                                             <option value="vmbr0">vmbr0 (Mặc định)</option>
@@ -447,7 +461,7 @@
                                         <div class="label-with-value">
                                             <label for="vlanTag">
                                                 <i data-lucide="split" class="field-icon"></i>
-                                                VLAN Tag
+                                                <span data-i18n="wizard.step3.vlan">VLAN Tag</span>
                                             </label>
                                             <span class="value-badge" id="vlanTagVal">Untagged</span>
                                         </div>
@@ -456,11 +470,11 @@
                                 </div>
 
                                 <div class="step-nav-actions flex-between">
-                                    <button type="button" class="btn-step-prev" onclick="goToStep(2)">
+                                    <button type="button" class="btn-step-prev" onclick="goToStep(2)" data-i18n="wizard.nav.back">
                                         <i data-lucide="chevron-left" class="btn-icon-sm"></i>
                                         <span>Quay lại</span>
                                     </button>
-                                    <button type="button" class="btn-step-next" onclick="goToStep(4)">
+                                    <button type="button" class="btn-step-next" onclick="goToStep(4)" data-i18n="wizard.step3.next">
                                         <span>Tiếp theo: Tùy Chọn & Scripts</span>
                                         <i data-lucide="chevron-right" class="btn-icon-sm"></i>
                                     </button>
@@ -473,7 +487,7 @@
                             <summary class="step-summary-header">
                                 <div class="step-badge-title" style="margin-bottom:0;">
                                     <span class="step-num">4</span>
-                                    <span class="step-title">Tự Động Hóa & Tùy Chọn Nâng Cao</span>
+                                    <span class="step-title" data-i18n="wizard.step4.title">Tự Động Hóa & Tùy Chọn Nâng Cao</span>
                                 </div>
                                 <i data-lucide="chevron-down" class="accordion-chevron"></i>
                             </summary>
@@ -483,14 +497,14 @@
                                     <div class="form-group flex-1">
                                         <label for="customTags">
                                             <i data-lucide="tags" class="field-icon"></i>
-                                            Tags Phân Loại
+                                            <span data-i18n="wizard.step4.tags">Tags Phân Loại</span>
                                         </label>
                                         <input type="text" id="customTags" name="tags" placeholder="vd: database, backend, k8s">
                                     </div>
                                     <div class="form-group flex-1">
                                         <label for="cpuType">
                                             <i data-lucide="cpu" class="field-icon"></i>
-                                            Kiến Trúc CPU
+                                            <span data-i18n="wizard.step4.cpu_type">Kiến Trúc CPU</span>
                                         </label>
                                         <select id="cpuType" name="cpuType">
                                             <option value="host" selected>Host Passthrough (Tối ưu)</option>
@@ -505,7 +519,7 @@
                                 <div class="form-group">
                                     <label for="sshPublicKey">
                                         <i data-lucide="key" class="field-icon"></i>
-                                        SSH Public Key (Root Passwordless)
+                                        <span data-i18n="wizard.step4.ssh_key">SSH Public Key (Root Passwordless)</span>
                                     </label>
                                     <textarea id="sshPublicKey" name="sshPublicKey" rows="2" placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5..."></textarea>
                                 </div>
@@ -515,37 +529,37 @@
                                     <div class="label-with-value">
                                         <label>
                                             <i data-lucide="layers" class="field-icon"></i>
-                                            <span>Thư Viện Ứng Dụng Hoàn Chỉnh (1-Click App Catalog)</span>
+                                            <span data-i18n="wizard.step4.app_catalog_title">Thư Viện Ứng Dụng Hoàn Chỉnh (1-Click App Catalog)</span>
                                         </label>
-                                        <span class="badge-optional" style="color: #38bdf8; border-color: rgba(56, 189, 248, 0.3);">Tự động cài đặt & cấu hình</span>
+                                        <span class="badge-optional" style="color: #38bdf8; border-color: rgba(56, 189, 248, 0.3);" data-i18n="wizard.step4.app_catalog_badge">Tự động cài đặt & cấu hình</span>
                                     </div>
                                     <div class="app-catalog-grid">
                                         <div class="app-catalog-card" onclick="applyAppCatalog('postgres')">
                                             <div class="app-card-icon"><i data-lucide="database"></i></div>
                                             <div class="app-card-info">
                                                 <strong>PostgreSQL 16</strong>
-                                                <small>Cơ sở dữ liệu SQL, tự tạo user & db</small>
+                                                <small data-i18n="catalog.postgres_desc">Cơ sở dữ liệu SQL, tự tạo user & db</small>
                                             </div>
                                         </div>
                                         <div class="app-catalog-card" onclick="applyAppCatalog('redis')">
                                             <div class="app-card-icon"><i data-lucide="zap"></i></div>
                                             <div class="app-card-info">
                                                 <strong>Redis In-Memory</strong>
-                                                <small>Cache & Sentinel, tối ưu bộ nhớ</small>
+                                                <small data-i18n="catalog.redis_desc">Cache & Sentinel, tối ưu bộ nhớ</small>
                                             </div>
                                         </div>
                                         <div class="app-catalog-card" onclick="applyAppCatalog('minio')">
                                             <div class="app-card-icon"><i data-lucide="hard-drive"></i></div>
                                             <div class="app-card-info">
                                                 <strong>MinIO Object Storage</strong>
-                                                <small>S3 Compatible Storage & Web Console</small>
+                                                <small data-i18n="catalog.minio_desc">Lưu trữ S3 tương thích & Web Console</small>
                                             </div>
                                         </div>
                                         <div class="app-catalog-card" onclick="applyAppCatalog('k3s')">
                                             <div class="app-card-icon"><i data-lucide="boxes"></i></div>
                                             <div class="app-card-info">
                                                 <strong>Kubernetes (k3s Node)</strong>
-                                                <small>K3s lightweight cluster node</small>
+                                                <small data-i18n="catalog.k3s_desc">Cụm Kubernetes K3s siêu nhẹ</small>
                                             </div>
                                         </div>
                                     </div>
@@ -556,35 +570,35 @@
                                     <div class="label-with-value">
                                         <label for="userData">
                                             <i data-lucide="code" class="field-icon"></i>
-                                            Script Cấu Hình Khởi Động (Cloud-Init / Post-Boot)
+                                            <span data-i18n="wizard.step4.cloud_init_title">Script Cấu Hình Khởi Động (Cloud-Init / Post-Boot)</span>
                                         </label>
                                         <span class="badge-optional">Cloud-Init / Shell</span>
                                     </div>
                                     <div class="script-presets-bar">
-                                        <span class="presets-label">Mẫu nhanh:</span>
+                                        <span class="presets-label" data-i18n="wizard.step4.presets_label">Mẫu nhanh:</span>
                                         <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('debian')">Debian Root SSH</button>
                                         <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('qemu')">QEMU Guest Agent</button>
                                         <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('docker')">Docker Engine</button>
                                         <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('nginx')">Nginx Web</button>
                                         <button type="button" class="btn-preset-chip" onclick="applyScriptPreset('security')">UFW Firewall</button>
-                                        <button type="button" class="btn-preset-chip btn-preset-clear" onclick="applyScriptPreset('clear')">Xóa script</button>
+                                        <button type="button" class="btn-preset-chip btn-preset-clear" onclick="applyScriptPreset('clear')" data-i18n="wizard.step4.clear_script">Xóa script</button>
                                     </div>
-                                    <textarea id="userData" name="userData" rows="6" class="code-textarea" placeholder="#cloud-config hoặc script #!/bin/bash..."></textarea>
+                                    <textarea id="userData" name="userData" rows="6" class="code-textarea" data-i18n-placeholder="wizard.step4.script_placeholder" placeholder="#cloud-config hoặc script #!/bin/bash..."></textarea>
                                 </div>
 
                                 <div class="form-options" style="margin-bottom: 8px;">
                                     <label class="checkbox-label">
                                         <input type="checkbox" id="upgrade" name="upgrade" checked>
-                                        <span>Tự động cập nhật gói hệ thống (Package Upgrade)</span>
+                                        <span data-i18n="wizard.step4.package_upgrade">Tự động cập nhật gói hệ thống (Package Upgrade)</span>
                                     </label>
                                     <label class="checkbox-label" style="margin-top: 8px;">
                                         <input type="checkbox" id="protection" name="protection">
-                                        <span>Bật chế độ bảo vệ chống xóa (VM Protection Mode)</span>
+                                        <span data-i18n="wizard.step4.protection_mode">Bật chế độ bảo vệ chống xóa (VM Protection Mode)</span>
                                     </label>
                                 </div>
 
                                 <div class="step-nav-actions flex-between">
-                                    <button type="button" class="btn-step-prev" onclick="goToStep(3)">
+                                    <button type="button" class="btn-step-prev" onclick="goToStep(3)" data-i18n="wizard.nav.back">
                                         <i data-lucide="chevron-left" class="btn-icon-sm"></i>
                                         <span>Quay lại Bước 3</span>
                                     </button>
@@ -592,7 +606,7 @@
                             </div>
                         </details>
 
-                        <button type="submit" id="btnSubmit" class="btn-primary" style="margin-top: 18px;">
+                        <button type="submit" id="btnSubmit" class="btn-primary" style="margin-top: 18px;" data-i18n="wizard.submit_btn">
                             <span class="spinner hidden"></span>
                             <span class="btn-text">Triển Khai VM</span>
                         </button>
@@ -606,11 +620,11 @@
                             <div>
                                 <div class="card-title-group">
                                     <i data-lucide="layers" class="icon-accent"></i>
-                                    <h2>Máy Ảo Quản Lý Bởi Pulumi</h2>
+                                    <h2 data-i18n="stacks.title">Máy Ảo Quản Lý Bởi Pulumi</h2>
                                 </div>
-                                <p>Các Stack độc lập được đồng bộ với Proxmox</p>
+                                <p data-i18n="stacks.subtitle">Các Stack độc lập được đồng bộ với Proxmox</p>
                             </div>
-                            <button id="btnRefresh" class="btn-secondary" title="Làm mới danh sách">
+                            <button id="btnRefresh" class="btn-secondary" title="Làm mới danh sách" data-i18n="stacks.refresh_btn">
                                 <i data-lucide="refresh-cw" class="btn-icon-sm"></i>
                                 <span>Làm Mới</span>
                             </button>
@@ -620,13 +634,13 @@
                             <table class="vm-table">
                                 <thead>
                                     <tr>
-                                        <th>Tên VM / Stack</th>
-                                        <th>Môi Trường</th>
-                                        <th>Node</th>
-                                        <th>VM ID</th>
-                                        <th>Địa Chỉ IP</th>
-                                        <th>Trạng Thái</th>
-                                        <th class="text-right">Thao Tác</th>
+                                        <th data-i18n="stacks.table.name">Tên VM / Stack</th>
+                                        <th data-i18n="stacks.table.env">Môi Trường</th>
+                                        <th data-i18n="stacks.table.node">Node</th>
+                                        <th data-i18n="stacks.table.vmid">VM ID</th>
+                                        <th data-i18n="stacks.table.ip">Địa Chỉ IP</th>
+                                        <th data-i18n="stacks.table.status">Trạng Thái</th>
+                                        <th class="text-right" data-i18n="stacks.table.actions">Thao Tác</th>
                                     </tr>
                                 </thead>
                                 <tbody id="vmTableBody">
@@ -648,16 +662,16 @@
                     <div>
                         <div class="card-title-group">
                             <i data-lucide="terminal" class="icon-accent"></i>
-                            <h2>Nhật Ký Triển Khai Pulumi Automation</h2>
+                            <h2 data-i18n="logs.title">Nhật Ký Triển Khai Pulumi Automation</h2>
                         </div>
-                        <p>Luồng output trực tiếp từ tiến trình Engine theo thời gian thực (SSE)</p>
+                        <p data-i18n="logs.subtitle">Luồng output trực tiếp từ tiến trình Engine theo thời gian thực (SSE)</p>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <button id="btnCopyLogs" class="btn-text-only" title="Sao chép toàn bộ nội dung nhật ký">
+                        <button id="btnCopyLogs" class="btn-text-only" title="Sao chép toàn bộ nội dung nhật ký" data-i18n="logs.copy_btn">
                             <i data-lucide="copy" class="btn-icon-sm"></i>
                             <span>Sao chép log</span>
                         </button>
-                        <button id="btnClearLogs" class="btn-text-only" title="Xóa màn hình nhật ký">
+                        <button id="btnClearLogs" class="btn-text-only" title="Xóa màn hình nhật ký" data-i18n="logs.clear_btn">
                             <i data-lucide="trash-2" class="btn-icon-sm"></i>
                             <span>Xóa log</span>
                         </button>
@@ -676,12 +690,12 @@
                     <div>
                         <div class="card-title-group">
                             <i data-lucide="shield-check" class="icon-accent"></i>
-                            <h2>Nhật Ký Kiểm Toán (Audit Logs & Governance)</h2>
+                            <h2 data-i18n="audit.title">Nhật Ký Kiểm Toán (Audit Logs & Governance)</h2>
                         </div>
-                        <p>Ghi vết chi tiết danh tính người dùng, vai trò (RBAC), hành động tạo/hủy stack và trạng thái phê duyệt</p>
+                        <p data-i18n="audit.subtitle">Ghi vết chi tiết danh tính người dùng, vai trò (RBAC), hành động tạo/hủy stack và trạng thái phê duyệt</p>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <button id="btnRefreshAudit" class="btn-secondary">
+                        <button id="btnRefreshAudit" class="btn-secondary" data-i18n="audit.refresh_btn">
                             <i data-lucide="refresh-cw" class="btn-icon-sm"></i>
                             <span>Làm mới Audit Logs</span>
                         </button>
@@ -692,13 +706,13 @@
                     <table class="vms-overview-table">
                         <thead>
                             <tr>
-                                <th style="min-width: 140px;">Thời Gian</th>
-                                <th style="min-width: 130px;">Người Dùng & Vai Trò</th>
-                                <th style="min-width: 150px;">Hành Động (Action)</th>
-                                <th style="min-width: 120px;">Mục Tiêu (Target)</th>
-                                <th style="min-width: 90px;">Môi Trường</th>
-                                <th style="min-width: 95px;">Trạng Thái</th>
-                                <th style="min-width: 200px;">Chi Tiết</th>
+                                <th style="min-width: 140px;" data-i18n="audit.table_time">Thời Gian</th>
+                                <th style="min-width: 130px;" data-i18n="audit.table_user_role">Người Dùng & Vai Trò</th>
+                                <th style="min-width: 150px;" data-i18n="audit.table_action">Hành Động (Action)</th>
+                                <th style="min-width: 120px;" data-i18n="audit.table_target">Mục Tiêu (Target)</th>
+                                <th style="min-width: 90px;" data-i18n="audit.table_env">Môi Trường</th>
+                                <th style="min-width: 95px;" data-i18n="audit.table_status">Trạng Thái</th>
+                                <th style="min-width: 200px;" data-i18n="audit.table_details">Chi Tiết</th>
                             </tr>
                         </thead>
                         <tbody id="auditTableBody">
@@ -717,7 +731,7 @@
             <div class="quota-overview-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 20px;">
                 <div class="card stat-card-quota">
                     <div class="stat-header">
-                        <span class="stat-title">Hạn Mức Máy Ảo (VMs Quota)</span>
+                        <span class="stat-title" data-i18n="quota.vm_title">Hạn Mức Máy Ảo (VMs Quota)</span>
                         <i data-lucide="server" class="stat-icon-quota"></i>
                     </div>
                     <div class="stat-body">
@@ -731,7 +745,7 @@
 
                 <div class="card stat-card-quota">
                     <div class="stat-header">
-                        <span class="stat-title">Hạn Mức CPU (vCPU Quota)</span>
+                        <span class="stat-title" data-i18n="quota.cpu_title">Hạn Mức CPU (vCPU Quota)</span>
                         <i data-lucide="cpu" class="stat-icon-quota"></i>
                     </div>
                     <div class="stat-body">
@@ -745,7 +759,7 @@
 
                 <div class="card stat-card-quota">
                     <div class="stat-header">
-                        <span class="stat-title">Hạn Mức Bộ Nhớ (RAM Quota)</span>
+                        <span class="stat-title" data-i18n="quota.ram_title">Hạn Mức Bộ Nhớ (RAM Quota)</span>
                         <i data-lucide="layers" class="stat-icon-quota"></i>
                     </div>
                     <div class="stat-body">
@@ -764,12 +778,12 @@
                     <div>
                         <div class="card-title-group">
                             <i data-lucide="check-square" class="icon-accent"></i>
-                            <h2>Hàng Đợi Phê Duyệt Khởi Tạo VM (Approval Gateway)</h2>
+                            <h2 data-i18n="quota.queue_title">Hàng Đợi Phê Duyệt Khởi Tạo VM (Approval Gateway)</h2>
                         </div>
-                        <p>Yêu cầu khởi tạo máy ảo trên môi trường STAGING/PROD hoặc vượt Quota cần Admin phê duyệt trước khi Pulumi kích hoạt</p>
+                        <p data-i18n="quota.queue_subtitle">Yêu cầu khởi tạo máy ảo trên môi trường STAGING/PROD hoặc vượt Quota cần Admin phê duyệt trước khi Pulumi kích hoạt</p>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <button id="btnRefreshApprovals" class="btn-secondary">
+                        <button id="btnRefreshApprovals" class="btn-secondary" data-i18n="quota.refresh_btn">
                             <i data-lucide="refresh-cw" class="btn-icon-sm"></i>
                             <span>Làm mới yêu cầu</span>
                         </button>
@@ -780,13 +794,13 @@
                     <table class="vms-overview-table">
                         <thead>
                             <tr>
-                                <th style="min-width: 130px;">Mã Yêu Cầu</th>
-                                <th style="min-width: 140px;">Người Yêu Cầu</th>
-                                <th style="min-width: 150px;">Danh Sách Máy Ảo</th>
-                                <th style="min-width: 90px;">Môi Trường</th>
-                                <th style="min-width: 160px;">Lý Do Cần Phê Duyệt</th>
-                                <th style="min-width: 110px;">Trạng Thái</th>
-                                <th style="min-width: 160px;" class="text-right">Thao Tác Admin</th>
+                                <th style="min-width: 130px;" data-i18n="quota.table_req_id">Mã Yêu Cầu</th>
+                                <th style="min-width: 140px;" data-i18n="quota.table_user">Người Yêu Cầu</th>
+                                <th style="min-width: 150px;" data-i18n="quota.table_vms">Danh Sách Máy Ảo</th>
+                                <th style="min-width: 90px;" data-i18n="quota.table_env">Môi Trường</th>
+                                <th style="min-width: 160px;" data-i18n="quota.table_reason">Lý Do Cần Phê Duyệt</th>
+                                <th style="min-width: 110px;" data-i18n="quota.table_status">Trạng Thái</th>
+                                <th style="min-width: 160px;" class="text-right" data-i18n="quota.table_actions">Thao Tác Admin</th>
                             </tr>
                         </thead>
                         <tbody id="approvalsTableBody">
@@ -806,7 +820,7 @@
             <div class="modal-header">
                 <div class="card-title-group">
                     <i data-lucide="info" class="icon-accent"></i>
-                    <h3 id="modalVmTitle">Chi Tiết Máy Ảo</h3>
+                    <h3 id="modalVmTitle" data-i18n="vm_detail.title">Chi Tiết Máy Ảo</h3>
                 </div>
                 <button id="btnCloseModal" class="btn-icon-close">
                     <i data-lucide="x" class="btn-icon-sm"></i>
@@ -826,7 +840,7 @@
             <div class="modal-header">
                 <div class="card-title-group">
                     <i data-lucide="camera" class="icon-accent"></i>
-                    <h3 id="snapshotModalTitle">Quản Lý Snapshot Máy Ảo</h3>
+                    <h3 id="snapshotModalTitle" data-i18n="snapshot.title">Quản Lý Snapshot Máy Ảo</h3>
                 </div>
                 <button id="btnCloseSnapshotModal" class="btn-icon-close">
                     <i data-lucide="x" class="btn-icon-sm"></i>
@@ -837,23 +851,23 @@
                 <div class="snapshot-create-box">
                     <div class="sub-section-title" style="margin-bottom:10px;">
                         <i data-lucide="plus-circle" class="field-icon"></i>
-                        <span>Tạo Snapshot Mới</span>
+                        <span data-i18n="snapshot.create_title">Tạo Snapshot Mới</span>
                     </div>
                     <form id="formCreateSnapshot" class="form-grid-2col">
                         <div class="form-group">
-                            <label class="form-label" for="snapNameInput">Tên Snapshot <span class="text-danger">*</span></label>
-                            <input type="text" id="snapNameInput" class="form-input" placeholder="vd: pre-upgrade, backup-v1" required>
+                            <label class="form-label" for="snapNameInput"><span data-i18n="snapshot.name_label">Tên Snapshot</span> <span class="text-danger">*</span></label>
+                            <input type="text" id="snapNameInput" class="form-input" data-i18n-placeholder="snapshot.name_placeholder" placeholder="vd: pre-upgrade, backup-v1" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="snapDescInput">Mô Tả / Ghi Chú</label>
-                            <input type="text" id="snapDescInput" class="form-input" placeholder="Ghi chú cấu hình trước thay đổi...">
+                            <label class="form-label" for="snapDescInput" data-i18n="snapshot.desc_label">Mô Tả / Ghi Chú</label>
+                            <input type="text" id="snapDescInput" class="form-input" data-i18n-placeholder="snapshot.desc_placeholder" placeholder="Ghi chú cấu hình trước thay đổi...">
                         </div>
                         <div class="form-group" style="grid-column: 1 / -1; display:flex; justify-content:space-between; align-items:center;">
                             <label class="checkbox-label">
                                 <input type="checkbox" id="snapVmStateInput">
-                                <span>Lưu trạng thái RAM (RAM State - chỉ khi VM đang chạy)</span>
+                                <span data-i18n="snapshot.ram_label">Lưu trạng thái RAM (RAM State - chỉ khi VM đang chạy)</span>
                             </label>
-                            <button type="submit" id="btnSubmitSnapshot" class="btn-primary" style="width: auto; padding: 8px 16px;">
+                            <button type="submit" id="btnSubmitSnapshot" class="btn-primary" style="width: auto; padding: 8px 16px;" data-i18n="snapshot.submit_btn">
                                 <i data-lucide="camera" class="btn-icon-sm"></i>
                                 <span>Tạo Snapshot</span>
                             </button>
@@ -864,17 +878,17 @@
                 <!-- Danh sách Snapshots -->
                 <div class="sub-section-title" style="margin: 18px 0 10px 0;">
                     <i data-lucide="history" class="field-icon"></i>
-                    <span>Danh Sách Bản Snapshot Đã Tạo</span>
+                    <span data-i18n="snapshot.list_title">Danh Sách Bản Snapshot Đã Tạo</span>
                 </div>
                 <div class="table-responsive">
                     <table class="vms-overview-table">
                         <thead>
                             <tr>
-                                <th>Tên Snapshot</th>
-                                <th>Thời Gian</th>
-                                <th>Mô Tả</th>
-                                <th>RAM State</th>
-                                <th class="text-right">Thao Tác</th>
+                                <th data-i18n="snapshot.table_name">Tên Snapshot</th>
+                                <th data-i18n="snapshot.table_time">Thời Gian</th>
+                                <th data-i18n="snapshot.table_desc">Mô Tả</th>
+                                <th data-i18n="snapshot.table_ram">RAM State</th>
+                                <th class="text-right" data-i18n="snapshot.table_ops">Thao Tác</th>
                             </tr>
                         </thead>
                         <tbody id="snapshotListBody">
@@ -895,8 +909,8 @@
                 <div class="card-title-group">
                     <i data-lucide="shield" class="icon-accent"></i>
                     <div>
-                        <h3 id="firewallModalTitle">Quản Lý Firewall & Security Groups</h3>
-                        <small id="firewallModalSubtitle" class="text-muted" style="font-size: 11px;">Mở/đóng Port và Kiểm soát truy cập mạng Proxmox VE</small>
+                        <h3 id="firewallModalTitle" data-i18n="firewall.title">Quản Lý Firewall & Security Groups</h3>
+                        <small id="firewallModalSubtitle" class="text-muted" style="font-size: 11px;" data-i18n="firewall.subtitle">Mở/đóng Port và Kiểm soát truy cập mạng Proxmox VE</small>
                     </div>
                 </div>
                 <div style="display:flex; align-items:center; gap:12px;">
@@ -918,9 +932,9 @@
                     <div class="presets-header">
                         <div style="display:flex; align-items:center; gap:6px;">
                             <i data-lucide="zap" class="field-icon" style="color:#f59e0b;"></i>
-                            <strong style="font-size:12.5px; color:#f8fafc;">1-Click Security Presets (Mẫu Mở Port Nhanh):</strong>
+                            <strong style="font-size:12.5px; color:#f8fafc;" data-i18n="firewall.presets_title">1-Click Security Presets (Mẫu Mở Port Nhanh):</strong>
                         </div>
-                        <span class="text-muted" style="font-size:11px;">Click để thêm ngay Rule mở cổng tương ứng</span>
+                        <span class="text-muted" style="font-size:11px;" data-i18n="firewall.presets_hint">Click để thêm ngay Rule mở cổng tương ứng</span>
                     </div>
                     <div class="firewall-presets-grid">
                         <button type="button" class="btn-fw-preset" onclick="applyFirewallPreset('ssh')">
@@ -954,47 +968,47 @@
                 <div class="firewall-create-box">
                     <div class="sub-section-title" style="margin-bottom:12px;">
                         <i data-lucide="plus-circle" class="field-icon"></i>
-                        <span>Thêm Quy Tắc Firewall (Security Rule)</span>
+                        <span data-i18n="firewall.create_title">Thêm Quy Tắc Firewall (Security Rule)</span>
                     </div>
                     <form id="formCreateFirewallRule" class="fw-rule-form-grid">
                         <div class="form-group">
-                            <label class="form-label" for="fwAction">Hành Động (Action)</label>
+                            <label class="form-label" for="fwAction" data-i18n="firewall.action_label">Hành Động (Action)</label>
                             <select id="fwAction" class="form-input" required>
-                                <option value="ACCEPT" selected>ACCEPT (Cho phép)</option>
-                                <option value="DROP">DROP (Chặn im lặng)</option>
-                                <option value="REJECT">REJECT (Từ chối phản hồi)</option>
+                                <option value="ACCEPT" selected>ACCEPT</option>
+                                <option value="DROP">DROP</option>
+                                <option value="REJECT">REJECT</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="fwType">Hướng (Direction)</label>
+                            <label class="form-label" for="fwType" data-i18n="firewall.direction_label">Hướng (Direction)</label>
                             <select id="fwType" class="form-input" required>
-                                <option value="in" selected>IN (Inbound / Chiều vào)</option>
-                                <option value="out">OUT (Outbound / Chiều ra)</option>
+                                <option value="in" selected>IN (Inbound)</option>
+                                <option value="out">OUT (Outbound)</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="fwProto">Giao Thức (Protocol)</label>
+                            <label class="form-label" for="fwProto" data-i18n="firewall.proto_label">Giao Thức (Protocol)</label>
                             <select id="fwProto" class="form-input">
                                 <option value="tcp" selected>TCP</option>
                                 <option value="udp">UDP</option>
                                 <option value="icmp">ICMP (Ping)</option>
-                                <option value="any">Tất cả (ANY)</option>
+                                <option value="any">ANY</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="fwDport">Cổng Đích (Port / dport)</label>
+                            <label class="form-label" for="fwDport" data-i18n="firewall.port_label">Cổng Đích (Port / dport)</label>
                             <input type="text" id="fwDport" class="form-input" placeholder="vd: 80, 443, 8000:8080">
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="fwSource">Nguồn Cho Phép (Source IP / CIDR)</label>
+                            <label class="form-label" for="fwSource" data-i18n="firewall.source_label">Nguồn Cho Phép (Source IP / CIDR)</label>
                             <input type="text" id="fwSource" class="form-input" placeholder="vd: 0.0.0.0/0 hoặc 192.168.1.50">
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="fwComment">Ghi Chú / Mục Đích</label>
+                            <label class="form-label" for="fwComment" data-i18n="firewall.comment_label">Ghi Chú / Mục Đích</label>
                             <input type="text" id="fwComment" class="form-input" placeholder="vd: Mở port Web Server Nginx">
                         </div>
                         <div class="form-group" style="grid-column: 1 / -1; display:flex; justify-content:flex-end;">
-                            <button type="submit" id="btnSubmitFwRule" class="btn-primary" style="width: auto; padding: 9px 20px;">
+                            <button type="submit" id="btnSubmitFwRule" class="btn-primary" style="width: auto; padding: 9px 20px;" data-i18n="firewall.submit_btn">
                                 <i data-lucide="shield-plus" class="btn-icon-sm"></i>
                                 <span>Thêm Quy Tắc Mạng</span>
                             </button>
@@ -1005,20 +1019,20 @@
                 <!-- Bảng Danh Sách Rules Trực Quan -->
                 <div class="sub-section-title" style="margin: 18px 0 10px 0;">
                     <i data-lucide="list-filter" class="field-icon"></i>
-                    <span>Danh Sách Quy Tắc Firewall Hiện Hành</span>
+                    <span data-i18n="firewall.list_title">Danh Sách Quy Tắc Firewall Hiện Hành</span>
                 </div>
                 <div class="table-responsive">
                     <table class="vms-overview-table">
                         <thead>
                             <tr>
-                                <th style="width: 50px;">Bật/Tắt</th>
-                                <th style="width: 90px;">Hành Động</th>
-                                <th style="width: 80px;">Hướng</th>
-                                <th style="width: 80px;">Giao Thức</th>
-                                <th style="width: 120px;">Cổng (Port)</th>
-                                <th>Nguồn (Source)</th>
-                                <th>Ghi Chú</th>
-                                <th class="text-right" style="width: 100px;">Thao Tác</th>
+                                <th style="width: 50px;" data-i18n="firewall.table_enable">Bật/Tắt</th>
+                                <th style="width: 90px;" data-i18n="firewall.table_action">Hành Động</th>
+                                <th style="width: 80px;" data-i18n="firewall.table_direction">Hướng</th>
+                                <th style="width: 80px;" data-i18n="firewall.table_proto">Giao Thức</th>
+                                <th style="width: 120px;" data-i18n="firewall.table_port">Cổng (Port)</th>
+                                <th data-i18n="firewall.table_source">Nguồn (Source)</th>
+                                <th data-i18n="firewall.table_comment">Ghi Chú</th>
+                                <th class="text-right" style="width: 100px;" data-i18n="firewall.table_ops">Thao Tác</th>
                             </tr>
                         </thead>
                         <tbody id="firewallRulesTableBody">
@@ -1190,8 +1204,8 @@
                 <div class="card-title-group">
                     <i data-lucide="bell-ring" class="icon-accent" style="color: #f59e0b;"></i>
                     <div>
-                        <h3>Trung Tâm Cảnh Báo Ngưỡng Tài Nguyên (Cluster Alerting)</h3>
-                        <small class="text-muted" style="font-size: 11.5px;">Tự động giám sát Storage ≥ 85%, quá tải CPU/RAM & gửi thông báo Telegram / Webhook</small>
+                        <h3 data-i18n="alert.title">Trung Tâm Cảnh Báo Ngưỡng Tài Nguyên (Cluster Alerting)</h3>
+                        <small class="text-muted" style="font-size: 11.5px;" data-i18n="alert.subtitle">Tự động giám sát Storage ≥ 85%, quá tải CPU/RAM & gửi thông báo Telegram / Webhook</small>
                     </div>
                 </div>
                 <button id="btnCloseAlertModal" class="btn-icon-close">
@@ -1201,16 +1215,16 @@
             <div class="modal-body" style="max-height: 80vh; overflow-y: auto;">
                 <!-- Modal Internal Tabs -->
                 <div class="modal-sub-tabs">
-                    <button type="button" class="modal-sub-tab active" data-alert-tab="tab-alert-status">
+                    <button type="button" class="modal-sub-tab active" data-alert-tab="tab-alert-status" data-i18n="alert.tab_active">
                         <i data-lucide="activity" class="btn-icon-xs"></i>
                         <span>Cảnh Báo Hoạt Động</span>
                         <span id="modalActiveAlertBadge" class="badge-count hidden">0</span>
                     </button>
-                    <button type="button" class="modal-sub-tab" data-alert-tab="tab-alert-config">
+                    <button type="button" class="modal-sub-tab" data-alert-tab="tab-alert-config" data-i18n="alert.tab_config">
                         <i data-lucide="settings" class="btn-icon-xs"></i>
                         <span>Cấu Hình Ngưỡng & Thông Báo</span>
                     </button>
-                    <button type="button" class="modal-sub-tab" data-alert-tab="tab-alert-history">
+                    <button type="button" class="modal-sub-tab" data-alert-tab="tab-alert-history" data-i18n="alert.tab_history">
                         <i data-lucide="history" class="btn-icon-xs"></i>
                         <span>Lịch Sử Cảnh Báo</span>
                     </button>
@@ -1222,7 +1236,7 @@
                         <div style="font-size:12.5px; color:#cbd5e1;">
                             <span id="activeAlertSummaryText">Đang tải danh sách cảnh báo...</span>
                         </div>
-                        <button type="button" id="btnManualCheckAlerts" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">
+                        <button type="button" id="btnManualCheckAlerts" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;" data-i18n="alert.manual_scan">
                             <i data-lucide="refresh-cw" class="btn-icon-xs"></i>
                             <span>Quét Tức Thời</span>
                         </button>
@@ -1237,48 +1251,48 @@
                     <form id="formAlertConfig" class="alert-config-form">
                         <div class="config-section-title">
                             <i data-lucide="gauge" class="field-icon"></i>
-                            <strong>1. Thiết Lập Ngưỡng Kích Hoạt Cảnh Báo (%)</strong>
+                            <strong data-i18n="alert.section_thresholds">1. Thiết Lập Ngưỡng Kích Hoạt Cảnh Báo (%)</strong>
                         </div>
                         <div class="config-grid-3">
                             <div class="form-group">
                                 <label for="cfgStorageThreshold">
                                     <i data-lucide="hard-drive" class="field-icon"></i>
-                                    <span>Ngưỡng Storage Pool (%)</span>
+                                    <span data-i18n="alert.lbl_storage">Ngưỡng Storage Pool (%)</span>
                                 </label>
                                 <div class="input-unit-group">
                                     <input type="number" id="cfgStorageThreshold" min="50" max="99" value="85" required class="form-input">
                                     <span class="input-unit">%</span>
                                 </div>
-                                <small class="text-muted" style="font-size:11px;">Mặc định 85%. Kích hoạt khi ổ đĩa ≥ 85%.</small>
+                                <small class="text-muted" style="font-size:11px;" data-i18n="alert.hint_storage">Mặc định 85%. Kích hoạt khi ổ đĩa ≥ 85%.</small>
                             </div>
                             <div class="form-group">
                                 <label for="cfgCpuThreshold">
                                     <i data-lucide="cpu" class="field-icon"></i>
-                                    <span>Ngưỡng Node CPU (%)</span>
+                                    <span data-i18n="alert.lbl_cpu">Ngưỡng Node CPU (%)</span>
                                 </label>
                                 <div class="input-unit-group">
                                     <input type="number" id="cfgCpuThreshold" min="50" max="99" value="85" required class="form-input">
                                     <span class="input-unit">%</span>
                                 </div>
-                                <small class="text-muted" style="font-size:11px;">Mặc định 85%. Kích hoạt khi CPU ≥ 85%.</small>
+                                <small class="text-muted" style="font-size:11px;" data-i18n="alert.hint_cpu">Mặc định 85%. Kích hoạt khi CPU ≥ 85%.</small>
                             </div>
                             <div class="form-group">
                                 <label for="cfgRamThreshold">
                                     <i data-lucide="memory-stick" class="field-icon"></i>
-                                    <span>Ngưỡng Node RAM (%)</span>
+                                    <span data-i18n="alert.lbl_ram">Ngưỡng Node RAM (%)</span>
                                 </label>
                                 <div class="input-unit-group">
                                     <input type="number" id="cfgRamThreshold" min="50" max="99" value="85" required class="form-input">
                                     <span class="input-unit">%</span>
                                 </div>
-                                <small class="text-muted" style="font-size:11px;">Mặc định 85%. Kích hoạt khi RAM ≥ 85%.</small>
+                                <small class="text-muted" style="font-size:11px;" data-i18n="alert.hint_ram">Mặc định 85%. Kích hoạt khi RAM ≥ 85%.</small>
                             </div>
                         </div>
 
                         <div class="form-group" style="margin-top: 12px;">
                             <label for="cfgCheckInterval">
                                 <i data-lucide="clock" class="field-icon"></i>
-                                <span>Chu Kỳ Quét Nền Tự Động (Giây)</span>
+                                <span data-i18n="alert.lbl_interval">Chu Kỳ Quét Nền Tự Động (Giây)</span>
                             </label>
                             <div class="input-unit-group" style="max-width: 260px;">
                                 <input type="number" id="cfgCheckInterval" min="10" max="600" value="30" required class="form-input">
@@ -1288,7 +1302,7 @@
 
                         <div class="config-section-title" style="margin-top: 20px;">
                             <i data-lucide="send" class="field-icon"></i>
-                            <strong>2. Kênh Gửi Thông Báo Tự Động (Telegram & Webhook)</strong>
+                            <strong data-i18n="alert.section_channels">2. Kênh Gửi Thông Báo Tự Động (Telegram & Webhook)</strong>
                         </div>
 
                         <!-- Telegram Config -->
@@ -1336,11 +1350,11 @@
                         <div id="alertConfigMsg" class="login-error-alert hidden" style="margin-top:14px;"></div>
 
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px;">
-                            <button type="button" id="btnTestAlertNotification" class="btn-secondary">
+                            <button type="button" id="btnTestAlertNotification" class="btn-secondary" data-i18n="alert.test_btn">
                                 <i data-lucide="send" class="btn-icon-xs"></i>
                                 <span>Gửi Thử Nghiệm (Test Alert)</span>
                             </button>
-                            <button type="submit" id="btnSaveAlertConfig" class="btn-primary">
+                            <button type="submit" id="btnSaveAlertConfig" class="btn-primary" data-i18n="alert.save_btn">
                                 <i data-lucide="save" class="btn-icon-xs"></i>
                                 <span>Lưu Cấu Hình Cảnh Báo</span>
                             </button>
@@ -1354,12 +1368,12 @@
                         <table class="vms-overview-table">
                             <thead>
                                 <tr>
-                                    <th>Thời Gian</th>
-                                    <th>Loại & Tài Nguyên</th>
-                                    <th>Node</th>
-                                    <th>Giá Trị</th>
-                                    <th>Mức Độ</th>
-                                    <th>Trạng Thái</th>
+                                    <th data-i18n="alert.hist_time">Thời Gian</th>
+                                    <th data-i18n="alert.hist_type">Loại & Tài Nguyên</th>
+                                    <th data-i18n="alert.hist_node">Node</th>
+                                    <th data-i18n="alert.hist_val">Giá Trị</th>
+                                    <th data-i18n="alert.hist_level">Mức Độ</th>
+                                    <th data-i18n="alert.hist_status">Trạng Thái</th>
                                 </tr>
                             </thead>
                             <tbody id="alertHistoryTableBody">
@@ -1381,8 +1395,8 @@
                 <div class="card-title-group">
                     <i data-lucide="cpu" class="icon-accent" style="color: #38bdf8;"></i>
                     <div>
-                        <h3 id="hotplugModalTitle">Cấu Hình Nóng (Hotplug Hardware) & Đa Ổ Đĩa</h3>
-                        <small id="hotplugModalSubtitle" class="text-muted" style="font-size: 11px;">Điều chỉnh trực tiếp vCPU, RAM & Gắn thêm ổ đĩa không cần reboot</small>
+                        <h3 id="hotplugModalTitle" data-i18n="hotplug.title">Cấu Hình Nóng (Hotplug Hardware) & Đa Ổ Đĩa</h3>
+                        <small id="hotplugModalSubtitle" class="text-muted" style="font-size: 11px;" data-i18n="hotplug.subtitle">Điều chỉnh trực tiếp vCPU, RAM & Gắn thêm ổ đĩa không cần reboot</small>
                     </div>
                 </div>
                 <button id="btnCloseHotplugModal" class="btn-icon-close">
@@ -1392,11 +1406,11 @@
             <div class="modal-body" style="max-height: 80vh; overflow-y: auto;">
                 <!-- Modal Internal Tabs -->
                 <div class="modal-sub-tabs">
-                    <button type="button" class="modal-sub-tab active" data-hotplug-tab="tab-hotplug-cpuram">
+                    <button type="button" class="modal-sub-tab active" data-hotplug-tab="tab-hotplug-cpuram" data-i18n="hotplug.tab_cpuram">
                         <i data-lucide="sliders" class="btn-icon-xs"></i>
                         <span>Thay Đổi Nóng CPU & RAM</span>
                     </button>
-                    <button type="button" class="modal-sub-tab" data-hotplug-tab="tab-hotplug-disks">
+                    <button type="button" class="modal-sub-tab" data-hotplug-tab="tab-hotplug-disks" data-i18n="hotplug.tab_disks">
                         <i data-lucide="hard-drive" class="btn-icon-xs"></i>
                         <span>Quản Lý Đĩa & Mở Rộng Dung Lượng</span>
                     </button>
@@ -1407,14 +1421,14 @@
                     <form id="formHotplugCpuRam">
                         <div class="channel-card" style="margin-bottom: 16px;">
                             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
-                                <span style="font-size: 12.5px; color:#cbd5e1; font-weight:600;">Thông Số Hiện Tại Của Máy Ảo:</span>
+                                <span style="font-size: 12.5px; color:#cbd5e1; font-weight:600;" data-i18n="hotplug.current_title">Thông Số Hiện Tại Của Máy Ảo:</span>
                                 <span id="hotplugVmStatusBadge" class="tag-deployed">RUNNING</span>
                             </div>
                             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; font-size:12px; color:#94a3b8;">
-                                <div>vCPU hiện tại: <strong id="curCpuVal" style="color:#f8fafc;">2 Cores</strong></div>
-                                <div>RAM hiện tại: <strong id="curRamVal" style="color:#f8fafc;">2048 MB (2 GB)</strong></div>
-                                <div>Cờ Hotplug: <code id="curHotplugFlags" style="color:#38bdf8;">disk,network,usb,memory,cpu</code></div>
-                                <div>Loại CPU: <span id="curCpuType" style="color:#cbd5e1;">host</span></div>
+                                <div><span data-i18n="hotplug.current_cpu">vCPU hiện tại:</span> <strong id="curCpuVal" style="color:#f8fafc;">2 Cores</strong></div>
+                                <div><span data-i18n="hotplug.current_ram">RAM hiện tại:</span> <strong id="curRamVal" style="color:#f8fafc;">2048 MB (2 GB)</strong></div>
+                                <div><span data-i18n="hotplug.hotplug_flags">Cờ Hotplug:</span> <code id="curHotplugFlags" style="color:#38bdf8;">disk,network,usb,memory,cpu</code></div>
+                                <div><span data-i18n="hotplug.cpu_type">Loại CPU:</span> <span id="curCpuType" style="color:#cbd5e1;">host</span></div>
                             </div>
                         </div>
 
@@ -1422,7 +1436,7 @@
                             <div class="form-group flex-1">
                                 <label for="hotplugCores">
                                     <i data-lucide="cpu" class="field-icon"></i>
-                                    <span>vCPU Mới (Cores)</span>
+                                    <span data-i18n="hotplug.new_cpu">vCPU Mới (Cores)</span>
                                 </label>
                                 <div class="numeric-input-group">
                                     <input type="number" id="hotplugCores" min="1" max="64" value="2" step="1" required class="spec-number-input">
@@ -1434,7 +1448,7 @@
                             <div class="form-group flex-1">
                                 <label for="hotplugMemoryMb">
                                     <i data-lucide="memory-stick" class="field-icon"></i>
-                                    <span>RAM Mới (MB)</span>
+                                    <span data-i18n="hotplug.new_ram">RAM Mới (MB)</span>
                                 </label>
                                 <div class="numeric-input-group">
                                     <input type="number" id="hotplugMemoryMb" min="512" max="65536" value="2048" step="256" required class="spec-number-input">
@@ -1446,8 +1460,8 @@
                         </div>
 
                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <span class="text-muted" style="font-size:11.5px;">⚡ Thay đổi có hiệu lực ngay lập tức không cần tắt máy ảo.</span>
-                            <button type="submit" id="btnSubmitHotplug" class="btn-primary">
+                            <span class="text-muted" style="font-size:11.5px;" data-i18n="hotplug.note">⚡ Thay đổi có hiệu lực ngay lập tức không cần tắt máy ảo.</span>
+                            <button type="submit" id="btnSubmitHotplug" class="btn-primary" data-i18n="hotplug.apply_btn">
                                 <i data-lucide="zap" class="btn-icon-xs"></i>
                                 <span>Áp Dụng Nóng (Hot Apply)</span>
                             </button>
@@ -1459,17 +1473,17 @@
                 <div id="tab-hotplug-disks" class="hotplug-tab-pane">
                     <div class="sub-section-title" style="margin-bottom:10px;">
                         <i data-lucide="layers" class="field-icon"></i>
-                        <span>Danh Sách Ổ Đĩa Đang Gắn (Attached Disks)</span>
+                        <span data-i18n="hotplug.attached_title">Danh Sách Ổ Đĩa Đang Gắn (Attached Disks)</span>
                     </div>
                     <div class="table-responsive" style="margin-bottom: 20px;">
                         <table class="vms-overview-table">
                             <thead>
                                 <tr>
-                                    <th>Slot</th>
-                                    <th>Storage Pool</th>
-                                    <th>Dung Lượng</th>
-                                    <th>Loại Đĩa</th>
-                                    <th class="text-right">Thao Tác Mở Rộng / Gỡ</th>
+                                    <th data-i18n="hotplug.table_slot">Slot</th>
+                                    <th data-i18n="hotplug.table_storage">Storage Pool</th>
+                                    <th data-i18n="hotplug.table_size">Dung Lượng</th>
+                                    <th data-i18n="hotplug.table_type">Loại Đĩa</th>
+                                    <th class="text-right" data-i18n="hotplug.table_ops">Thao Tác Mở Rộng / Gỡ</th>
                                 </tr>
                             </thead>
                             <tbody id="hotplugDisksTableBody">
@@ -1484,21 +1498,21 @@
                     <div class="channel-card">
                         <div class="sub-section-title" style="margin-bottom:12px;">
                             <i data-lucide="plus-circle" class="field-icon"></i>
-                            <span>Gắn Thêm Đĩa Phụ Mới (Hot-attach Secondary Virtual Disk)</span>
+                            <span data-i18n="hotplug.attach_title">Gắn Thêm Đĩa Phụ Mới (Hot-attach Secondary Virtual Disk)</span>
                         </div>
                         <form id="formAttachDisk" class="fw-rule-form-grid" style="grid-template-columns: 1fr 1fr 1fr;">
                             <div class="form-group">
-                                <label class="form-label" for="attachStorageSelect">Storage Pool Đích <span class="required-star">*</span></label>
+                                <label class="form-label" for="attachStorageSelect"><span data-i18n="hotplug.target_storage">Storage Pool Đích</span> <span class="required-star">*</span></label>
                                 <select id="attachStorageSelect" class="form-input" required>
                                     <option value="" disabled selected>Đang tải Storage Pools...</option>
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label class="form-label" for="attachSizeGb">Dung Lượng (GB) <span class="required-star">*</span></label>
+                                <label class="form-label" for="attachSizeGb"><span data-i18n="hotplug.disk_size">Dung Lượng (GB)</span> <span class="required-star">*</span></label>
                                 <input type="number" id="attachSizeGb" min="1" max="2000" value="20" required class="form-input">
                             </div>
                             <div class="form-group">
-                                <label class="form-label" for="attachSlotSelect">Slot Bus</label>
+                                <label class="form-label" for="attachSlotSelect" data-i18n="hotplug.bus_slot">Slot Bus</label>
                                 <select id="attachSlotSelect" class="form-input">
                                     <option value="scsi1">scsi1</option>
                                     <option value="scsi2">scsi2</option>
@@ -1509,9 +1523,9 @@
                             <div class="form-group" style="grid-column: 1 / -1; display:flex; justify-content:space-between; align-items:center;">
                                 <label class="checkbox-label" style="font-size:12px;">
                                     <input type="checkbox" id="attachDiscardCheck" checked>
-                                    <span>Bật TRIM/Discard (SSD Emulation)</span>
+                                    <span data-i18n="hotplug.discard_label">Bật TRIM/Discard (SSD Emulation)</span>
                                 </label>
-                                <button type="submit" id="btnSubmitAttachDisk" class="btn-primary" style="padding: 8px 16px;">
+                                <button type="submit" id="btnSubmitAttachDisk" class="btn-primary" style="padding: 8px 16px;" data-i18n="hotplug.attach_btn">
                                     <i data-lucide="download-cloud" class="btn-icon-xs"></i>
                                     <span>Gắn Đĩa Ngay (Hot Attach)</span>
                                 </button>
@@ -1528,6 +1542,7 @@
         <i data-lucide="chevron-up" class="btn-icon"></i>
     </button>
 
-    <script src="app.js?v=20260819-sso"></script>
+    <script src="i18n.js?v=20260820-13"></script>
+    <script src="app.js?v=20260820-13"></script>
 </body>
 </html>

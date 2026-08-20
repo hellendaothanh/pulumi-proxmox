@@ -5,6 +5,30 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ==========================================
+    // LANGUAGE SWITCHER & EVENT LISTENERS
+    // ==========================================
+    window.toggleLangDropdown = (e) => {
+        e?.stopPropagation();
+        const menu = document.getElementById("langDropdownMenu");
+        if (menu) menu.classList.toggle("show");
+    };
+
+    document.addEventListener("click", () => {
+        const menu = document.getElementById("langDropdownMenu");
+        if (menu) menu.classList.remove("show");
+    });
+
+    window.addEventListener("portal_language_changed", () => {
+        if (cachedClusterData && cachedClusterData.length > 0) {
+            renderClusterView(cachedClusterData, currentSearchTerm);
+        }
+        if (typeof loadVms === "function") loadVms();
+        if (typeof loadQuotasAndApprovals === "function") loadQuotasAndApprovals();
+        if (typeof loadAuditLogs === "function") loadAuditLogs();
+        if (typeof loadClusterAlerts === "function") loadClusterAlerts();
+    });
+
+    // ==========================================
     // STEPPED PROVISION FORM NAVIGATION WIZARD
     // ==========================================
     window.goToStep = (stepNumber) => {
@@ -317,7 +341,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Xử lý Đăng xuất
     if (btnLogout) {
         btnLogout.addEventListener("click", async () => {
-            if (confirm("Bạn có chắc chắn muốn đăng xuất khỏi hệ thống không?")) {
+            if (confirmDialog("Bạn có chắc chắn muốn đăng xuất khỏi hệ thống không?", "Are you sure you want to sign out?")) {
                 try {
                     await fetch("/api/auth/logout", {
                         method: "POST",
@@ -544,6 +568,67 @@ document.addEventListener("DOMContentLoaded", () => {
         document.body.removeChild(ta);
     }
 
+    // Global Bilingual Helpers for Toasts and Prompts
+    function translateToastMessage(msg) {
+        const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
+        if (!isEn || !msg) return msg;
+        let text = String(msg);
+        text = text.replace(/Đã đăng xuất an toàn\./i, "Signed out safely.");
+        text = text.replace(/Nhật ký đang trống!/i, "Log output is empty!");
+        text = text.replace(/Đã sao chép toàn bộ nhật ký!/i, "Copied full log output!");
+        text = text.replace(/Đã sao chép:\s*(.*)/i, "Copied: $1");
+        text = text.replace(/Đổi mật khẩu thành công! Mật khẩu mới có hiệu lực ngay\./i, "Password changed successfully! New password is now active.");
+        text = text.replace(/Chào mừng (.*) đăng nhập thành công!/i, "Welcome $1, successfully signed in!");
+        text = text.replace(/Đăng nhập thất bại:\s*(.*)/i, "Login failed: $1");
+        text = text.replace(/Vui lòng nhập 'Tên Máy Ảo \/ Tiền Tố \(VM Base Name\)'!/i, "Please provide 'VM / Instance Base Name'!");
+        text = text.replace(/Vui lòng chọn 'Proxmox Node'!/i, "Please select a 'Proxmox Node'!");
+        text = text.replace(/Vui lòng chọn 'Ổ Lưu Trữ VM Disk'!/i, "Please select 'Target VM Datastore'!");
+        text = text.replace(/Vui lòng chọn ít nhất một Node để phân bổ Cluster!/i, "Please select at least one Node for cluster distribution!");
+        text = text.replace(/Vui lòng chọn 'Image Hệ Điều Hành \(Cloud-Init \/ ISO\)'!/i, "Please select an 'Operating System Image'!");
+        text = text.replace(/Vui lòng cung cấp số lượng 'vCPU Cores' hợp lệ \(>= 1\)!/i, "Please provide a valid number of 'vCPU Cores' (>= 1)!");
+        text = text.replace(/Vui lòng cung cấp dung lượng 'RAM' hợp lệ \(>= 1 GB\)!/i, "Please provide valid 'RAM' capacity (>= 1 GB)!");
+        text = text.replace(/Vui lòng cung cấp dung lượng 'Ổ Đĩa OS' hợp lệ \(>= 5 GB\)!/i, "Please provide valid 'OS Boot Disk' size (>= 5 GB)!");
+        text = text.replace(/Đã chọn chế độ 'LXC Container' \(Siêu nhẹ, tối ưu RAM\/CPU\)!/i, "Selected 'LXC Container' mode (Ultra-lightweight, optimized RAM/CPU)!");
+        text = text.replace(/Đã chọn chế độ 'QEMU Virtual Machine' \(Hệ điều hành độc lập\)!/i, "Selected 'QEMU Virtual Machine' mode (Full OS isolation)!");
+        text = text.replace(/Đã nạp trọn bộ Stack ứng dụng '([^']+)' kèm phần cứng & bootstrap script!/i, "Loaded '$1' Application Stack template with hardware & bootstrap script!");
+        text = text.replace(/Đã áp dụng Template Phần Cứng:\s*(.*)/i, "Applied Hardware Template: $1");
+        text = text.replace(/Đã tắt cảnh báo\./i, "Alert dismissed.");
+        text = text.replace(/Không thể tắt cảnh báo\./i, "Failed to dismiss alert.");
+        text = text.replace(/Đang quét tức thời tài nguyên cụm\.\.\./i, "Scanning cluster resources in realtime...");
+        text = text.replace(/Quét hoàn tất!\s*(\d+)\s*cảnh báo hoạt động\./i, "Scan complete! $1 active alert(s).");
+        text = text.replace(/Đã lưu cấu hình Cảnh Báo Ngưỡng thành công!/i, "Cluster Alert configuration saved successfully!");
+        text = text.replace(/Đang lưu cấu hình cảnh báo ngưỡng\.\.\./i, "Saving alert threshold configuration...");
+        text = text.replace(/Đã thay đổi nóng cấu hình phần cứng thành công!/i, "Hardware hotplug configuration applied successfully!");
+        text = text.replace(/Đang điều chỉnh cấu hình nóng\s*\(([^)]+)\)\.\.\./i, "Applying live hotplug ($1)...");
+        text = text.replace(/Đã mở rộng đĩa\s+(\w+)\s+thành công!/i, "Disk $1 resized successfully!");
+        text = text.replace(/Đã gắn đĩa\s+(\w+)\s+thành công!/i, "Disk $1 attached successfully!");
+        text = text.replace(/Đã gỡ bỏ đĩa\s+(\w+)\s+thành công!/i, "Disk $1 detached successfully!");
+        text = text.replace(/Đang gửi lệnh\s+(.*)\s+tới VM #(\d+)\.\.\./i, "Sending $1 command to VM #$2...");
+        text = text.replace(/Đã gửi lệnh\s+(.*)\s+thành công!/i, "Sent $1 command successfully!");
+        text = text.replace(/Đang tạo snapshot '([^']+)'\.\.\./i, "Creating snapshot '$1'...");
+        text = text.replace(/Tạo snapshot '([^']+)' thành công!/i, "Snapshot '$1' created successfully!");
+        text = text.replace(/Đang khôi phục về snapshot '([^']+)'\.\.\./i, "Rolling back to snapshot '$1'...");
+        text = text.replace(/Đã khôi phục về snapshot '([^']+)' thành công!/i, "Snapshot '$1' restored successfully!");
+        text = text.replace(/Đang xóa snapshot '([^']+)'\.\.\./i, "Deleting snapshot '$1'...");
+        text = text.replace(/Đã xóa snapshot '([^']+)' thành công!/i, "Snapshot '$1' deleted successfully!");
+        text = text.replace(/Đã thêm quy tắc\s+(.*)\s+thành công!/i, "Added rule $1 successfully!");
+        text = text.replace(/Đã cập nhật trạng thái Rule #(\d+)!/i, "Updated status for Rule #$1!");
+        text = text.replace(/Đã xóa quy tắc Firewall thành công!/i, "Firewall rule deleted successfully!");
+        text = text.replace(/Đang tiến hành hủy máy ảo thuộc stack '([^']+)'\.\.\./i, "Destroying virtual machines for stack '$1'...");
+        text = text.replace(/Đã xử lý yêu cầu thành công!/i, "Request processed successfully!");
+        text = text.replace(/Lỗi mở rộng đĩa:\s*(.*)/i, "Disk resize error: $1");
+        text = text.replace(/Lỗi gỡ đĩa:\s*(.*)/i, "Disk detach error: $1");
+        text = text.replace(/Lỗi gắn đĩa:\s*(.*)/i, "Disk attach error: $1");
+        text = text.replace(/Lỗi kết nối:\s*(.*)/i, "Connection error: $1");
+        text = text.replace(/Không thể xóa:\s*(.*)/i, "Cannot delete: $1");
+        return text;
+    }
+
+    function confirmDialog(viText, enText) {
+        const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
+        return confirm(isEn ? enText : viText);
+    }
+
     // Helper Toast & RBAC Alert Box
     window.showToast = (msg, type = "info") => {
         let toast = document.getElementById("appToast");
@@ -553,16 +638,18 @@ document.addEventListener("DOMContentLoaded", () => {
             toast.className = "app-toast";
             document.body.appendChild(toast);
         }
+        const localizedMsg = translateToastMessage(msg);
         toast.className = `app-toast toast-${type} show`;
-        toast.innerHTML = (type === "error" ? "⛔ " : (type === "warning" ? "⚠️ " : "ℹ️ ")) + msg;
+        toast.innerHTML = (type === "error" ? "⛔ " : (type === "warning" ? "⚠️ " : "ℹ️ ")) + localizedMsg;
         setTimeout(() => {
             toast.classList.remove("show");
         }, type === "error" ? 4500 : 2500);
     };
 
     window.showRbacAlert = (message) => {
-        showToast(message, "error");
-        alert(message);
+        const localized = translateToastMessage(message);
+        showToast(localized, "error");
+        alert(localized);
     };
 
     // Helper Environment & Tags Badges
@@ -654,7 +741,7 @@ document.addEventListener("DOMContentLoaded", () => {
         clusterContainer.innerHTML = `
             <div class="card text-center text-muted">
                 <span class="spinner" style="margin: 20px auto; display:block;"></span>
-                Đang quét thông tin Nodes, Storages, Images và VM từ Proxmox API...
+                ${window.t('cluster.scanning')}
             </div>
         `;
 
@@ -733,8 +820,8 @@ document.addEventListener("DOMContentLoaded", () => {
             clusterContainer.innerHTML = `
                 <div class="card text-center text-muted" style="padding: 40px 20px;">
                     <i data-lucide="search-x" style="width:40px;height:40px;margin:0 auto 12px;opacity:0.6;display:block;"></i>
-                    <h3 style="color:#f8fafc; font-size:16px; margin-bottom:6px;">Không tìm thấy máy ảo hoặc Node phù hợp</h3>
-                    <p style="font-size:13px;">Không có kết quả nào khớp với từ khóa "<strong>${searchTerm}</strong>". Thử tìm theo Tên VM, VM ID, IP hoặc Tags.</p>
+                    <h3 style="color:#f8fafc; font-size:16px; margin-bottom:6px;">${window.t('cluster.node_not_found')}</h3>
+                    <p style="font-size:13px;">${window.t('cluster.no_search_results', searchTerm)}</p>
                 </div>
             `;
             if (window.lucide) window.lucide.createIcons();
@@ -747,16 +834,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div class="quick-nav-header">
                     <div class="quick-nav-title">
                         <i data-lucide="compass" class="nav-icon"></i>
-                        <span>Mục Lục Node (${filteredNodes.length} Nodes)</span>
+                        <span>${window.t('cluster.node_index')} (${filteredNodes.length} Nodes)</span>
                     </div>
                     <div class="quick-nav-actions">
                         <button class="btn-toggle-all" onclick="expandAllNodes(true)">
                             <i data-lucide="chevrons-down" class="btn-icon-xs"></i>
-                            <span>Mở tất cả</span>
+                            <span>${window.t('cluster.expand_all')}</span>
                         </button>
                         <button class="btn-toggle-all" onclick="expandAllNodes(false)">
                             <i data-lucide="chevrons-up" class="btn-icon-xs"></i>
-                            <span>Thu gọn</span>
+                            <span>${window.t('cluster.collapse_all')}</span>
                         </button>
                     </div>
                 </div>
@@ -766,7 +853,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         const runningCount = node.vms ? node.vms.filter(v => (typeof v.status === "object" ? v.status?.status : v.status) === "running").length : 0;
                         const storageType = getNodePrimaryStorageType(node);
                         return `
-                            <button class="node-chip-link" onclick="focusAndScrollToNode('${node.node}')" title="Chuyển nhanh đến ${node.node}">
+                            <button class="node-chip-link" onclick="focusAndScrollToNode('${node.node}')" title="${window.t('tooltip.toggle_node_chip', node.node)}">
                                 <span class="status-dot online"></span>
                                 <strong>${node.node}</strong>
                                 <span class="chip-vm-count">${runningCount}/${vmCount} VMs</span>
@@ -812,7 +899,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             </div>
                         `).join("")}
                     </div>
-                ` : `<div class="text-muted" style="font-size:11px; margin-top:6px;">(Không có file hoặc không hỗ trợ đọc content)</div>`;
+                ` : `<div class="text-muted" style="font-size:11px; margin-top:6px;">${window.t('cluster.no_files')}</div>`;
 
                 return `
                     <div class="storage-item ${isStorageDanger ? 'storage-danger' : ''}">
@@ -821,7 +908,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                 <i data-lucide="database" class="field-icon"></i>
                                 <span>${st.storage}</span>
                                 <span class="storage-type-tag">${st.type}</span>
-                                ${isStorageDanger ? `<span class="badge-storage-danger">🚨 Vượt ngưỡng (${percent}% ≥ ${storageThresh}%)</span>` : ''}
+                                ${isStorageDanger ? `<span class="badge-storage-danger">${window.t('cluster.storage_danger_badge', percent, storageThresh)}</span>` : ''}
                             </div>
                             <div class="storage-usage-text ${isStorageDanger ? 'text-danger' : ''}">${used} / ${total} (${percent}%)</div>
                         </div>
@@ -829,9 +916,9 @@ document.addEventListener("DOMContentLoaded", () => {
                             <div class="progress-bar-fill ${isStorageDanger ? 'progress-bar-danger' : ''}" style="width: ${percent}%;"></div>
                         </div>
                         <div style="font-size:11.5px; color:var(--text-muted); display:flex; justify-content:space-between;">
-                            <span>Khả dụng: <strong>${free}</strong></span>
+                            <span>${window.t('cluster.storage_avail')} <strong>${free}</strong></span>
                             <button class="storage-files-toggle" onclick="toggleStorageFiles('${node.node}-${st.storage}')">
-                                <span>Xem Files (${st.contents ? st.contents.length : 0})</span>
+                                <span>${window.t('cluster.storage_view_files')} (${st.contents ? st.contents.length : 0})</span>
                                 <i data-lucide="chevron-down" style="width:12px;height:12px;"></i>
                             </button>
                         </div>
@@ -851,7 +938,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 const ipBadges = vm.agentIps && vm.agentIps.length > 0 
                     ? `<div class="ip-chips-grid">${vm.agentIps.map(ip => `
-                        <button class="copy-chip-sm" onclick="copyToClipboard('${ip}', this)" title="Click để sao chép IP">
+                        <button class="copy-chip-sm" onclick="copyToClipboard('${ip}', this)" title="${window.t('tooltip.copy_ip')}">
                             <i data-lucide="network" style="width:11px;height:11px;opacity:0.7;"></i>
                             <span>${ip}</span>
                             <i data-lucide="copy" class="copy-icon-sm"></i>
@@ -893,7 +980,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                     const isDevForbidden = (role === "developer" && isProdOrStag);
 
                                     if (role === "viewer") {
-                                        return `<span class="badge-optional" style="font-size:10.5px; opacity:0.6;"><i data-lucide="eye" style="width:11px;height:11px;"></i> Chỉ xem</span>`;
+                                        return `<span class="badge-optional" style="font-size:10.5px; opacity:0.6;"><i data-lucide="eye" style="width:11px;height:11px;"></i> ${window.t('action.read_only')}</span>`;
                                     }
 
                                     let powerBtns = "";
@@ -901,37 +988,37 @@ document.addEventListener("DOMContentLoaded", () => {
                                         powerBtns = `<span class="badge-optional" title="Môi trường ${vmEnv.toUpperCase()} - Chỉ Admin mới có quyền điều khiển" style="font-size:10.5px; color:#f59e0b; border-color:rgba(245,158,11,0.3);"><i data-lucide="lock" style="width:11px;height:11px;"></i> ${vmEnv.toUpperCase()} Lock</span>`;
                                     } else {
                                         powerBtns = isRunning ? `
-                                            <button class="btn-power-op btn-power-reboot" onclick="triggerVmPower('${node.node}', ${vm.vmid}, 'reboot')" title="Khởi động lại an toàn (Reboot)">
+                                            <button class="btn-power-op btn-power-reboot" onclick="triggerVmPower('${node.node}', ${vm.vmid}, 'reboot')" title="${window.t('action.reboot')}">
                                                 <i data-lucide="rotate-cw" class="action-icon-xs"></i>
                                             </button>
-                                            <button class="btn-power-op btn-power-stop" onclick="triggerVmPower('${node.node}', ${vm.vmid}, 'shutdown')" title="Tắt nguồn an toàn (ACPI Shutdown)">
+                                            <button class="btn-power-op btn-power-stop" onclick="triggerVmPower('${node.node}', ${vm.vmid}, 'shutdown')" title="${window.t('action.shutdown')}">
                                                 <i data-lucide="power" class="action-icon-xs"></i>
                                             </button>
                                         ` : `
-                                            <button class="btn-power-op btn-power-start" onclick="triggerVmPower('${node.node}', ${vm.vmid}, 'start')" title="Bật nguồn máy ảo (Start)">
+                                            <button class="btn-power-op btn-power-start" onclick="triggerVmPower('${node.node}', ${vm.vmid}, 'start')" title="${window.t('action.start')}">
                                                 <i data-lucide="play" class="action-icon-xs"></i>
                                             </button>
                                         `;
                                     }
 
                                     const snapBtn = isDevForbidden ? '' : `
-                                        <button class="btn-action-sm btn-action-snap" onclick="openVmSnapshots('${node.node}', ${vm.vmid}, '${vm.name}')" title="Quản lý Snapshots">
+                                        <button class="btn-action-sm btn-action-snap" onclick="openVmSnapshots('${node.node}', ${vm.vmid}, '${vm.name}')" title="${window.t('action.snapshot')}">
                                             <i data-lucide="camera" class="btn-icon-sm"></i>
-                                            <span>Snapshot</span>
+                                            <span>${window.t('action.snapshot')}</span>
                                         </button>
                                     `;
 
                                     const fwBtn = isDevForbidden ? '' : `
-                                        <button class="btn-action-sm" style="border-color:rgba(56,189,248,0.3); color:#38bdf8;" onclick="openVmFirewall('${node.node}', ${vm.vmid}, '${vm.name}')" title="Quản lý Firewall & Mở/Đóng Port">
+                                        <button class="btn-action-sm" style="border-color:rgba(56,189,248,0.3); color:#38bdf8;" onclick="openVmFirewall('${node.node}', ${vm.vmid}, '${vm.name}')" title="${window.t('action.firewall')}">
                                             <i data-lucide="shield" class="btn-icon-sm"></i>
-                                            <span>Firewall</span>
+                                            <span>${window.t('action.firewall')}</span>
                                         </button>
                                     `;
 
                                     const hotplugBtn = isDevForbidden ? '' : `
-                                        <button class="btn-action-sm btn-action-hotplug" onclick="openVmHotplug('${node.node}', ${vm.vmid}, '${vm.name}')" title="Cấu hình nóng vCPU, RAM & Quản lý đĩa">
+                                        <button class="btn-action-sm btn-action-hotplug" onclick="openVmHotplug('${node.node}', ${vm.vmid}, '${vm.name}')" title="${window.t('action.config_tooltip')}">
                                             <i data-lucide="cpu" class="btn-icon-sm"></i>
-                                            <span>Cấu hình</span>
+                                            <span>${window.t('action.config')}</span>
                                         </button>
                                     `;
 
@@ -940,9 +1027,9 @@ document.addEventListener("DOMContentLoaded", () => {
                                         ${hotplugBtn}
                                         ${fwBtn}
                                         ${snapBtn}
-                                        <button class="btn-action-sm" onclick="showVmDetail('${node.node}', ${vm.vmid})" title="Xem cấu hình Proxmox">
+                                        <button class="btn-action-sm" onclick="showVmDetail('${node.node}', ${vm.vmid})" title="${window.t('action.details')}">
                                             <i data-lucide="eye" class="btn-icon-sm"></i>
-                                            <span>Chi tiết</span>
+                                            <span>${window.t('action.details')}</span>
                                         </button>
                                     `;
                                 })()}
@@ -950,11 +1037,11 @@ document.addEventListener("DOMContentLoaded", () => {
                         </td>
                     </tr>
                 `;
-            }).join("") : `<tr><td colspan="5" class="text-center text-muted" style="padding: 24px;">Không có máy ảo nào trên node này</td></tr>`;
+            }).join("") : `<tr><td colspan="5" class="text-center text-muted" style="padding: 24px;">${window.t('cluster.no_vms')}</td></tr>`;
 
             return `
                 <div class="node-block" id="node-block-${node.node}">
-                    <div class="node-header" onclick="toggleNodeCollapse('${node.node}')" title="Nhấp để đóng/mở chi tiết Node ${node.node}">
+                    <div class="node-header" onclick="toggleNodeCollapse('${node.node}')" title="${window.t('tooltip.toggle_node', node.node)}">
                         <div class="node-title-group">
                             <button class="btn-node-toggle" id="btn-toggle-${node.node}">
                                 <i data-lucide="chevron-down" class="toggle-icon"></i>
@@ -968,7 +1055,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                         : (getNodePrimaryStorageType(node) === 'lvm' ? '<span class="storage-pill storage-pill-lvm"><i data-lucide="hard-drive" class="pill-icon"></i> LVM-Thin</span>' : '<span class="storage-pill storage-pill-dir"><i data-lucide="folder" class="pill-icon"></i> Directory</span>')}
                                     <span class="node-vm-badge">${node.vms ? node.vms.length : 0} VMs</span>
                                 </div>
-                                <button class="copy-chip" onclick="event.stopPropagation(); copyToClipboard('${nodeIp}', this)" title="Click để sao chép IP Node">
+                                <button class="copy-chip" onclick="event.stopPropagation(); copyToClipboard('${nodeIp}', this)" title="${window.t('tooltip.copy_node_ip')}">
                                     <i data-lucide="network" class="chip-icon"></i>
                                     <span>IP: ${nodeIp}</span>
                                     <i data-lucide="copy" class="copy-icon"></i>
@@ -977,15 +1064,15 @@ document.addEventListener("DOMContentLoaded", () => {
                         </div>
                         <div class="node-stats-summary" onclick="event.stopPropagation();">
                             <div class="stat-box">
-                                <span class="stat-label">CPU Sử Dụng</span>
+                                <span class="stat-label">${window.t('cluster.node_cpu')}</span>
                                 <span class="stat-value">${cpuPercent}%</span>
                             </div>
                             <div class="stat-box">
-                                <span class="stat-label">RAM Đã Dùng</span>
+                                <span class="stat-label">${window.t('cluster.node_ram')}</span>
                                 <span class="stat-value">${memUsed} / ${memMax} (${memPercent}%)</span>
                             </div>
                             <div class="stat-box">
-                                <span class="stat-label">Uptime</span>
+                                <span class="stat-label">${window.t('cluster.node_uptime')}</span>
                                 <span class="stat-value">${formatUptime(node.uptime)}</span>
                             </div>
                         </div>
@@ -997,7 +1084,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             <div>
                                 <div class="sub-section-title">
                                     <i data-lucide="hard-drive" class="field-icon"></i>
-                                    <span>Storages & Disks (Local / LVM / ZFS)</span>
+                                    <span>${window.t('cluster.storages_section')}</span>
                                 </div>
                                 <div class="storage-list">
                                     ${storagesHtml}
@@ -1008,17 +1095,17 @@ document.addEventListener("DOMContentLoaded", () => {
                             <div>
                                 <div class="sub-section-title">
                                     <i data-lucide="monitor" class="field-icon"></i>
-                                    <span>Danh Sách Máy Ảo (${node.vms.length} VMs)</span>
+                                    <span>${window.t('cluster.vms_list')} (${node.vms.length} VMs)</span>
                                 </div>
                                 <div class="table-responsive">
                                     <table class="vms-overview-table">
                                         <thead>
                                             <tr>
-                                                <th style="min-width: 140px;">Máy Ảo & ID</th>
-                                                <th style="min-width: 95px;">Trạng Thái</th>
-                                                <th style="min-width: 120px;">Địa Chỉ IP</th>
-                                                <th style="min-width: 130px;">Cấu Hình</th>
-                                                <th class="text-right" style="min-width: 220px;">Thao Tác</th>
+                                                <th style="min-width: 140px;">${window.t('cluster.table.vmid')}</th>
+                                                <th style="min-width: 95px;">${window.t('cluster.table.status')}</th>
+                                                <th style="min-width: 120px;">${window.t('cluster.table.ip')}</th>
+                                                <th style="min-width: 130px;">${window.t('cluster.table.specs')}</th>
+                                                <th class="text-right" style="min-width: 220px;">${window.t('cluster.table.actions')}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -1188,59 +1275,67 @@ document.addEventListener("DOMContentLoaded", () => {
         const vm = node.vms.find(v => v.vmid === vmid);
         if (!vm) return;
 
+        const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
         const statusStr = typeof vm.status === "object" ? (vm.status?.status || "unknown") : (vm.status || "unknown");
         const isRunning = statusStr === "running";
         const diskDisplay = getVmDiskSize(vm);
 
-        modalVmTitle.textContent = `Chi Tiết Máy Ảo: ${vm.name} (ID: ${vmid})`;
+        modalVmTitle.textContent = isEn 
+            ? `Virtual Machine Details: ${vm.name} (ID: ${vmid})` 
+            : `Chi Tiết Máy Ảo: ${vm.name} (ID: ${vmid})`;
+
+        const statusLabel = isEn 
+            ? (isRunning ? 'Running' : (statusStr === 'stopped' ? 'Stopped' : statusStr)) 
+            : (isRunning ? 'Đang chạy' : (statusStr === 'stopped' ? 'Đã tắt' : statusStr));
+
         modalVmBody.innerHTML = `
             <div class="modal-grid">
                 <div class="modal-field">
-                    <div class="modal-label">Node Lưu Trữ</div>
+                    <div class="modal-label">${window.t('wizard.summary.node')}</div>
                     <div class="modal-value">${nodeName}</div>
                 </div>
                 <div class="modal-field">
-                    <div class="modal-label">Trạng Thái</div>
+                    <div class="modal-label">${window.t('vm_detail.status')}</div>
                     <div class="modal-value">
                         <span class="status-indicator ${isRunning ? 'status-running' : 'status-stopped'}">
                             <span class="status-dot ${isRunning ? 'online' : ''}"></span>
-                            ${isRunning ? 'Đang chạy (Running)' : (statusStr === 'stopped' ? 'Đã tắt (Stopped)' : statusStr)}
+                            ${statusLabel}
                         </span>
                     </div>
                 </div>
                 <div class="modal-field">
-                    <div class="modal-label">CPU Cores & Type</div>
+                    <div class="modal-label">${isEn ? 'CPU Cores & Architecture' : 'vCPU & Kiến Trúc'}</div>
                     <div class="modal-value">${vm.config?.cores || vm.cpus} Cores (${vm.config?.cpu || "default"})</div>
                 </div>
                 <div class="modal-field">
-                    <div class="modal-label">RAM Đã Gán</div>
+                    <div class="modal-label">${window.t('vm_detail.ram')}</div>
                     <div class="modal-value">${formatBytes(vm.maxmem)}</div>
                 </div>
                 <div class="modal-field">
-                    <div class="modal-label">Dung Lượng Ổ Đĩa (Disk Size)</div>
+                    <div class="modal-label">${window.t('vm_detail.disk')}</div>
                     <div class="modal-value">${diskDisplay}</div>
                 </div>
                 <div class="modal-field">
-                    <div class="modal-label">Machine Type</div>
+                    <div class="modal-label">${isEn ? 'Machine Type' : 'Loại Máy Ảo (Machine)'}</div>
                     <div class="modal-value">${vm.config?.machine || "i440fx"}</div>
                 </div>
                 <div class="modal-field">
-                    <div class="modal-label">Protection Mode</div>
-                    <div class="modal-value">${vm.config?.protection ? '<span class="badge-protected"><i data-lucide="shield-check" class="badge-svg"></i> Protected</span>' : '<span class="text-muted">Tắt (No)</span>'}</div>
+                    <div class="modal-label">${isEn ? 'Protection Mode' : 'Chế Độ Bảo Vệ'}</div>
+                    <div class="modal-value">${vm.config?.protection ? `<span class="badge-protected"><i data-lucide="shield-check" class="badge-svg"></i> ${isEn ? 'Protected' : 'Đang bảo vệ'}</span>` : `<span class="text-muted">${isEn ? 'Disabled' : 'Tắt'}</span>`}</div>
                 </div>
                 <div class="modal-field">
-                    <div class="modal-label">Địa Chỉ IP (Agent)</div>
+                    <div class="modal-label">${window.t('vm_detail.ip')}</div>
                     <div class="modal-value">
                         ${vm.agentIps && vm.agentIps.length ? vm.agentIps.map(ip => `
-                            <button class="copy-chip-sm" onclick="copyToClipboard('${ip}', this)" title="Click để sao chép IP">
+                            <button class="copy-chip-sm" onclick="copyToClipboard('${ip}', this)" title="${window.t('tooltip.copy_ip')}">
                                 <span>${ip}</span>
                                 <i data-lucide="copy" class="copy-icon-sm"></i>
                             </button>
-                        `).join(" ") : "Chưa có IP (Cần QEMU Guest Agent)"}
+                        `).join(" ") : window.t('vm_detail.no_ip')}
                     </div>
                 </div>
                 <div class="modal-field">
-                    <div class="modal-label">Network Bridge & VLAN</div>
+                    <div class="modal-label">${isEn ? 'Network Bridge & VLAN' : 'Cầu Mạng & VLAN'}</div>
                     <div class="modal-value">
                         ${(() => {
                             const net0Str = vm.config?.net0 || "";
@@ -1253,12 +1348,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     </div>
                 </div>
                 <div class="modal-field">
-                    <div class="modal-label">Ổ Đĩa Khởi Động (Boot)</div>
+                    <div class="modal-label">${window.t('vm_detail.boot_disk')}</div>
                     <div class="modal-value">${vm.config?.boot || "scsi0"}</div>
                 </div>
             </div>
 
-            <div class="modal-label" style="margin-bottom:6px;">Toàn Bộ Cấu Hình Gốc (Proxmox Config Raw)</div>
+            <div class="modal-label" style="margin-bottom:6px;">${window.t('vm_detail.raw_config')}</div>
             <div class="raw-config-box">${JSON.stringify(vm.config, null, 2)}</div>
         `;
 
@@ -1280,7 +1375,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (action === "reset") actionLabel = "Reset cưỡng bức (Force Reset)";
 
         if (action === "stop" || action === "reset") {
-            if (!confirm(`⚠️ Bạn có chắc muốn thực hiện ${actionLabel} cho VM #${vmid} không? Thao tác tắt đột ngột có thể làm mất dữ liệu chưa lưu!`)) {
+            if (!confirmDialog(`⚠️ Bạn có chắc muốn thực hiện ${actionLabel} cho VM #${vmid} không? Thao tác tắt đột ngột có thể làm mất dữ liệu chưa lưu!`, `⚠️ Are you sure you want to perform ${action} on VM #${vmid}? Forced action may cause unsaved data loss!`)) {
                 return;
             }
         }
@@ -1323,77 +1418,70 @@ document.addEventListener("DOMContentLoaded", () => {
     let currentSnapshotVm = { node: "", vmid: 0, name: "" };
 
     if (btnCloseSnapshotModal && snapshotModal) {
-        btnCloseSnapshotModal.addEventListener("click", () => snapshotModal.classList.add("hidden"));
-        snapshotModal.addEventListener("click", (e) => {
-            if (e.target === snapshotModal) snapshotModal.classList.add("hidden");
+        btnCloseSnapshotModal.addEventListener("click", () => {
+            snapshotModal.classList.add("hidden");
         });
     }
 
-    window.openVmSnapshots = async (nodeName, vmid, vmName) => {
-        if (!snapshotModal) return;
-        currentSnapshotVm = { node: nodeName, vmid: Number(vmid), name: vmName };
-        snapshotModalTitle.textContent = `Snapshots: ${vmName || 'VM'} (#${vmid}) @ ${nodeName}`;
-        
-        // Reset form
+    window.openVmSnapshots = async (node, vmid, vmname) => {
+        currentSnapshotVm = { node, vmid, name: vmname };
+        const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
+        if (snapshotModalTitle) {
+            snapshotModalTitle.textContent = isEn 
+                ? `Manage Snapshots: ${vmname || `VM #${vmid}`}`
+                : `Quản Lý Snapshots: ${vmname || `VM #${vmid}`}`;
+        }
         if (snapNameInput) snapNameInput.value = `snap-${Date.now().toString().slice(-6)}`;
         if (snapDescInput) snapDescInput.value = "";
-        if (snapVmStateInput) snapVmStateInput.checked = false;
+        if (snapVmStateInput) snapVmStateInput.checked = true;
 
-        snapshotModal.classList.remove("hidden");
-        if (window.lucide) window.lucide.createIcons();
+        if (snapshotModal) snapshotModal.classList.remove("hidden");
         await loadVmSnapshots();
     };
 
     async function loadVmSnapshots() {
-        if (!snapshotListBody || !currentSnapshotVm.node || !currentSnapshotVm.vmid) return;
-        snapshotListBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted" style="padding: 20px;">Đang tải danh sách snapshot...</td></tr>`;
+        if (!snapshotListBody || !currentSnapshotVm.vmid) return;
+        snapshotListBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted" style="padding: 20px;"><span class="spinner" style="margin:0 auto 6px;display:block;"></span> Đang tải danh sách snapshots...</td></tr>`;
 
         try {
-            const res = await fetch(`/api/nodes/${currentSnapshotVm.node}/vms/${currentSnapshotVm.vmid}/snapshots`);
+            const res = await fetch(`/api/nodes/${currentSnapshotVm.node}/vms/${currentSnapshotVm.vmid}/snapshots`, {
+                headers: getAuthHeaders()
+            });
             const data = await res.json();
+            if (data.success && Array.isArray(data.data)) {
+                const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
+                const list = data.data.filter(s => s.name !== "current");
+                if (list.length === 0) {
+                    snapshotListBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted" style="padding: 20px;">${isEn ? 'No snapshots recorded yet.' : 'Chưa có bản snapshot nào.'}</td></tr>`;
+                    return;
+                }
 
-            if (!data.success || !Array.isArray(data.data) || data.data.length === 0) {
-                snapshotListBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted" style="padding: 20px;">Chưa có bản snapshot nào.</td></tr>`;
-                return;
-            }
-
-            // Lọc các snapshot hợp lệ (bỏ qua 'current')
-            const validSnaps = data.data.filter(s => s.name && s.name !== "current");
-            if (validSnaps.length === 0) {
-                snapshotListBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted" style="padding: 20px;">Chưa có bản snapshot nào.</td></tr>`;
-                return;
-            }
-
-            snapshotListBody.innerHTML = validSnaps.map(snap => {
-                const snapTime = snap.snaptime ? new Date(snap.snaptime * 1000).toLocaleString() : "-";
-                const isCurrent = snap.current === 1;
-                return `
-                    <tr>
-                        <td>
-                            <strong style="color:#f8fafc;">${snap.name}</strong>
-                            ${isCurrent ? '<span class="tag-deployed" style="margin-left:6px;">Hiện Tại</span>' : ''}
-                        </td>
-                        <td style="font-family:'JetBrains Mono',monospace; font-size:11.5px; color:#cbd5e1;">${snapTime}</td>
-                        <td class="text-muted" style="font-size:12px;">${snap.description || "(Không có mô tả)"}</td>
-                        <td>${snap.vmstate ? '<span class="tag-env tag-env-pro">Có RAM</span>' : '<span class="text-muted" style="font-size:11px;">Không</span>'}</td>
-                        <td class="text-right">
-                            <div style="display:inline-flex; gap:6px;">
-                                <button class="btn-action-sm" onclick="rollbackVmSnapshot('${snap.name}')" title="Khôi phục máy ảo về bản snapshot này">
+                snapshotListBody.innerHTML = list.map(s => {
+                    const timeStr = s.snaptime ? new Date(s.snaptime * 1000).toLocaleString() : "-";
+                    const hasRam = s.vmstate === 1 || s.vmstate === true;
+                    return `
+                        <tr>
+                            <td><strong style="font-family:'JetBrains Mono',monospace; color:#38bdf8;">${s.name}</strong></td>
+                            <td style="font-size:12px; color:#cbd5e1;">${timeStr}</td>
+                            <td style="font-size:12px; color:#94a3b8; max-width:200px;">${s.description || "-"}</td>
+                            <td>${hasRam ? '<span class="tag-deployed"><i data-lucide="check" class="badge-svg"></i> RAM State</span>' : '<span class="text-muted" style="font-size:11px;">Disk Only</span>'}</td>
+                            <td class="text-right">
+                                <button class="btn-action-sm" style="border-color:rgba(56,189,248,0.3); color:#38bdf8; margin-right:4px;" onclick="rollbackVmSnapshot('${s.name}')" title="Khôi phục máy ảo về snapshot này">
                                     <i data-lucide="rotate-ccw" class="btn-icon-sm"></i>
-                                    <span>Khôi phục</span>
+                                    <span>${window.t('snapshot.rollback_btn')}</span>
                                 </button>
-                                <button class="btn-danger-sm" onclick="deleteVmSnapshot('${snap.name}')" title="Xóa snapshot này">
+                                <button class="btn-action-sm" style="border-color:rgba(239,68,68,0.3); color:#ef4444;" onclick="deleteVmSnapshot('${s.name}')" title="Xóa vĩnh viễn snapshot này">
                                     <i data-lucide="trash-2" class="btn-icon-sm"></i>
+                                    <span>${window.t('snapshot.delete_btn')}</span>
                                 </button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            }).join("");
-
-            if (window.lucide) window.lucide.createIcons();
+                            </td>
+                        </tr>
+                    `;
+                }).join("");
+                if (window.lucide) window.lucide.createIcons();
+            }
         } catch (err) {
-            snapshotListBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger" style="padding: 20px;">Lỗi tải snapshot: ${err.message}</td></tr>`;
+            snapshotListBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger" style="padding: 20px;">Lỗi tải snapshots: ${err.message}</td></tr>`;
         }
     }
 
@@ -1403,20 +1491,20 @@ document.addEventListener("DOMContentLoaded", () => {
             const snapname = snapNameInput.value.trim();
             const description = snapDescInput.value.trim();
             const vmstate = snapVmStateInput.checked;
+            const btnSubmit = formCreateSnapshot.querySelector("button[type='submit']");
 
             if (!snapname) {
-                alert("Vui lòng nhập tên Snapshot!");
+                showToast("⚠️ Vui lòng nhập tên Snapshot!");
                 return;
             }
 
-            const btnSubmit = document.getElementById("btnSubmitSnapshot");
             if (btnSubmit) btnSubmit.disabled = true;
             showToast(`📸 Đang tạo snapshot '${snapname}'...`);
 
             try {
                 const res = await fetch(`/api/nodes/${currentSnapshotVm.node}/vms/${currentSnapshotVm.vmid}/snapshots`, {
                     method: "POST",
-                    headers: getAuthHeaders(),
+                    headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
                     body: JSON.stringify({ snapname, description, vmstate })
                 });
                 const data = await res.json();
@@ -1437,7 +1525,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     window.rollbackVmSnapshot = async (snapname) => {
-        if (!confirm(`🔄 Bạn có chắc muốn KHÔI PHỤC máy ảo về bản snapshot '${snapname}' không? Các thay đổi sau thời điểm snapshot sẽ bị đảo ngược!`)) {
+        if (!confirmDialog(`🔄 Bạn có chắc muốn KHÔI PHỤC máy ảo về bản snapshot '${snapname}' không? Các thay đổi sau thời điểm snapshot sẽ bị đảo ngược!`, `🔄 Are you sure you want to RESTORE VM to snapshot '${snapname}'? Changes made after this snapshot will be reverted!`)) {
             return;
         }
 
@@ -1503,8 +1591,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     window.openVmFirewall = async (node, vmid, vmname) => {
         currentFirewallVm = { node, vmid, vmname };
+        const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
         document.getElementById("firewallModalTitle").textContent = `Firewall & Security Groups: ${vmname || `VM #${vmid}`}`;
-        document.getElementById("firewallModalSubtitle").textContent = `Node: ${node} | VMID: ${vmid} — Quản lý Inbound/Outbound Port Rules`;
+        document.getElementById("firewallModalSubtitle").textContent = isEn 
+            ? `Node: ${node} | VMID: ${vmid} — Inbound/Outbound Port & Network Access Rules`
+            : `Node: ${node} | VMID: ${vmid} — Quản lý Inbound/Outbound Port Rules`;
         firewallModal.classList.remove("hidden");
         if (window.lucide) window.lucide.createIcons();
         await loadVmFirewall();
@@ -1512,8 +1603,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function loadVmFirewall() {
         if (!currentFirewallVm || !firewallRulesTableBody) return;
+        const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
 
-        firewallRulesTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding: 24px;"><span class="spinner" style="display:inline-block; vertical-align:middle; margin-right:8px;"></span> Đang tải quy tắc Firewall...</td></tr>`;
+        firewallRulesTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding: 24px;"><span class="spinner" style="display:inline-block; vertical-align:middle; margin-right:8px;"></span> ${isEn ? 'Loading Firewall Rules...' : 'Đang tải quy tắc Firewall...'}</td></tr>`;
 
         try {
             const res = await fetch(`/api/nodes/${currentFirewallVm.node}/vms/${currentFirewallVm.vmid}/firewall`, {
@@ -1529,12 +1621,14 @@ document.addEventListener("DOMContentLoaded", () => {
                     toggleVmFirewall.checked = isEnabled;
                 }
                 if (firewallEnableStatusText) {
-                    firewallEnableStatusText.textContent = isEnabled ? "Firewall: ON (Đang bảo vệ)" : "Firewall: OFF (Tắt)";
+                    firewallEnableStatusText.textContent = isEnabled 
+                        ? (isEn ? "Firewall: ON (Active Protection)" : "Firewall: ON (Đang bảo vệ)") 
+                        : (isEn ? "Firewall: OFF (Disabled)" : "Firewall: OFF (Tắt)");
                     firewallEnableStatusText.style.color = isEnabled ? "#38bdf8" : "#94a3b8";
                 }
 
                 if (!rules || rules.length === 0) {
-                    firewallRulesTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding: 28px;">Chưa có quy tắc Firewall nào. Sử dụng <strong>1-Click Presets</strong> ở trên hoặc form bên dưới để thêm rule.</td></tr>`;
+                    firewallRulesTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding: 28px;">${window.t('firewall.empty')}</td></tr>`;
                     return;
                 }
 
@@ -1723,7 +1817,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Xóa Rule Firewall
     window.deleteVmFirewallRule = async (pos) => {
-        if (!confirm(`🗑️ Bạn có chắc muốn XÓA quy tắc Firewall #${pos} này không?`)) return;
+        if (!confirmDialog(`🗑️ Bạn có chắc muốn XÓA quy tắc Firewall #${pos} này không?`, `🗑️ Are you sure you want to DELETE Firewall Rule #${pos}?`)) return;
         if (!currentFirewallVm) return;
 
         showToast(`🗑️ Đang xóa Rule #${pos}...`);
@@ -2019,12 +2113,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 datastoreSelect.value = preferred.storage;
             }
         } else {
-            datastoreSelect.innerHTML = `<option value="local-lvm">local-lvm (Mặc định)</option>`;
+            const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
+            datastoreSelect.innerHTML = `<option value="local-lvm">local-lvm (${isEn ? 'Default' : 'Mặc định'})</option>`;
         }
 
         // Cập nhật thẻ hiển thị tài nguyên còn lại của Node (Live Resource Breakdown)
         const nodeResourceCard = document.getElementById("nodeResourceCard");
         if (nodeResourceCard) {
+            const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
             const freeMem = Math.max(0, (selectedNode.maxmem || 0) - (selectedNode.mem || 0));
             const memPct = selectedNode.maxmem ? Math.round(((selectedNode.mem || 0) / selectedNode.maxmem) * 100) : 0;
             const cpuPct = Math.round((selectedNode.cpu || 0) * 100);
@@ -2032,29 +2128,29 @@ document.addEventListener("DOMContentLoaded", () => {
             const storageBadgesHtml = validStorages.map(st => {
                 const isZfs = st.storage.includes("zfs");
                 const iconName = isZfs ? "database" : "hard-drive";
-                return `<span class="storage-pill ${isZfs ? 'storage-pill-zfs' : 'storage-pill-lvm'}"><i data-lucide="${iconName}" class="pill-icon"></i> <strong>${st.storage}</strong>: ${formatBytes(st.avail)} trống</span>`;
+                return `<span class="storage-pill ${isZfs ? 'storage-pill-zfs' : 'storage-pill-lvm'}"><i data-lucide="${iconName}" class="pill-icon"></i> <strong>${st.storage}</strong>: ${formatBytes(st.avail)} ${isEn ? 'free' : 'trống'}</span>`;
             }).join(" ");
 
             nodeResourceCard.innerHTML = `
                 <div class="node-resource-header">
-                    <span style="display:flex;align-items:center;gap:6px;"><i data-lucide="activity" class="pill-icon"></i> Tài nguyên khả dụng: <strong>${selectedNode.node}</strong></span>
-                    <span class="status-indicator status-running"><span class="status-dot online"></span> Sẵn sàng</span>
+                    <span style="display:flex;align-items:center;gap:6px;"><i data-lucide="activity" class="pill-icon"></i> ${isEn ? 'Available Resources:' : 'Tài nguyên khả dụng:'} <strong>${selectedNode.node}</strong></span>
+                    <span class="status-indicator status-running"><span class="status-dot online"></span> ${isEn ? 'Ready' : 'Sẵn sàng'}</span>
                 </div>
                 <div class="node-resource-metrics">
                     <div class="resource-metric-box">
-                        <span class="resource-metric-title"><i data-lucide="memory-stick" style="width:12px;height:12px;"></i> RAM Còn Trống</span>
+                        <span class="resource-metric-title"><i data-lucide="memory-stick" style="width:12px;height:12px;"></i> ${isEn ? 'Free Memory (RAM)' : 'RAM Còn Trống'}</span>
                         <span class="resource-metric-val">${formatBytes(freeMem)} / ${formatBytes(selectedNode.maxmem)}</span>
-                        <small class="text-muted" style="font-size:10px;">Đã dùng ${memPct}%</small>
+                        <small class="text-muted" style="font-size:10px;">${isEn ? 'Used' : 'Đã dùng'} ${memPct}%</small>
                     </div>
                     <div class="resource-metric-box">
-                        <span class="resource-metric-title"><i data-lucide="cpu" style="width:12px;height:12px;"></i> CPU Cores & Tải</span>
+                        <span class="resource-metric-title"><i data-lucide="cpu" style="width:12px;height:12px;"></i> ${isEn ? 'CPU Cores & Load' : 'CPU Cores & Tải'}</span>
                         <span class="resource-metric-val">${selectedNode.maxcpu || 0} vCPU Cores</span>
-                        <small class="text-muted" style="font-size:10px;">Mức tải hiện tại: ${cpuPct}%</small>
+                        <small class="text-muted" style="font-size:10px;">${isEn ? 'Current Load:' : 'Mức tải hiện tại:'} ${cpuPct}%</small>
                     </div>
                 </div>
                 <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">
-                    <span>Ổ Đĩa Chứa VM (Datastores):</span>
-                    <div class="resource-storage-list">${storageBadgesHtml || '<span class="text-muted">Không có</span>'}</div>
+                    <span>${isEn ? 'VM Datastores:' : 'Ổ Đĩa Chứa VM (Datastores):'}</span>
+                    <div class="resource-storage-list">${storageBadgesHtml || `<span class="text-muted">${isEn ? 'None' : 'Không có'}</span>`}</div>
                 </div>
             `;
             nodeResourceCard.style.display = "flex";
@@ -2402,24 +2498,25 @@ document.addEventListener("DOMContentLoaded", () => {
                     const canDelete = role === "admin" || (role === "developer" && !isProdOrStag);
 
                     let actionCellHtml = "";
+                    const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
                     const fwQuickBtn = (vm.vmId && vm.nodeName && role !== "viewer") ? `
-                        <button class="btn-action-sm btn-action-hotplug" style="margin-right:4px;" onclick="openVmHotplug('${vm.nodeName}', ${vm.vmId}, '${vm.vmName}')" title="Cấu hình nóng vCPU, RAM & Quản lý đĩa">
+                        <button class="btn-action-sm btn-action-hotplug" style="margin-right:4px;" onclick="openVmHotplug('${vm.nodeName}', ${vm.vmId}, '${vm.vmName}')" title="${window.t('action.config_tooltip')}">
                             <i data-lucide="cpu" class="btn-icon-sm"></i>
-                            <span>Cấu hình</span>
+                            <span>${window.t('action.config')}</span>
                         </button>
-                        <button class="btn-action-sm" style="border-color:rgba(56,189,248,0.3); color:#38bdf8; margin-right:4px;" onclick="openVmFirewall('${vm.nodeName}', ${vm.vmId}, '${vm.vmName}')" title="Mở/Đóng Port Firewall">
+                        <button class="btn-action-sm" style="border-color:rgba(56,189,248,0.3); color:#38bdf8; margin-right:4px;" onclick="openVmFirewall('${vm.nodeName}', ${vm.vmId}, '${vm.vmName}')" title="${window.t('action.firewall')}">
                             <i data-lucide="shield" class="btn-icon-sm"></i>
-                            <span>Port</span>
+                            <span>${isEn ? 'Firewall' : 'Port'}</span>
                         </button>
                     ` : '';
 
                     if (role === "viewer") {
-                        actionCellHtml = `<span class="badge-optional" style="font-size:11px; opacity:0.6;"><i data-lucide="lock" style="width:11px;height:11px;"></i> Chỉ xem</span>`;
+                        actionCellHtml = `<span class="badge-optional" style="font-size:11px; opacity:0.6;"><i data-lucide="lock" style="width:11px;height:11px;"></i> ${isEn ? 'Read-only' : 'Chỉ xem'}</span>`;
                     } else if (role === "developer" && isProdOrStag) {
                         actionCellHtml = `
                             <div style="display:flex; justify-content:flex-end; align-items:center;">
                                 ${fwQuickBtn}
-                                <span class="badge-optional" title="Môi trường ${vm.environment.toUpperCase()} - Chỉ Admin mới có quyền xóa" style="font-size:11px; color:#ef4444; border-color:rgba(239,68,68,0.3);"><i data-lucide="shield-alert" style="width:11px;height:11px;"></i> Protected</span>
+                                <span class="badge-optional" title="${isEn ? `Environment ${vm.environment.toUpperCase()} - Admin only deletion` : `Môi trường ${vm.environment.toUpperCase()} - Chỉ Admin mới có quyền xóa`}" style="font-size:11px; color:#ef4444; border-color:rgba(239,68,68,0.3);"><i data-lucide="shield-alert" style="width:11px;height:11px;"></i> Protected</span>
                             </div>
                         `;
                     } else {
@@ -2428,7 +2525,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                 ${fwQuickBtn}
                                 <button class="btn-danger-sm" onclick="destroyVm('${vm.stackName}', ${vm.protection})">
                                     <i data-lucide="trash" class="btn-icon-sm"></i>
-                                    Xóa
+                                    <span>${window.t('action.delete')}</span>
                                 </button>
                             </div>
                         `;
@@ -3068,6 +3165,71 @@ runcmd:
     const auditTableBody = document.getElementById("auditTableBody");
     const btnRefreshAudit = document.getElementById("btnRefreshAudit");
 
+    function formatAuditDetails(rawDetails, isEn) {
+        if (!rawDetails) return "-";
+        if (!isEn) return rawDetails;
+
+        let text = String(rawDetails);
+        // System initialization
+        text = text.replace(/Hệ thống Authentication, Governance & Audit Logs khởi động thành công/i, "Authentication, Governance & Audit Logs subsystems initialized successfully");
+        text = text.replace(/Khởi tạo hệ thống kiểm toán/i, "Audit system initialized");
+
+        // Login & Auth Patterns
+        text = text.replace(/Đăng nhập thành công qua tài khoản nội bộ:\s*(\w+)/i, "Successfully authenticated via local account: $1");
+        text = text.replace(/Đăng nhập thành công qua\s+([^(]+)\s*\(([^)]+)\)\s+với vai trò\s+(\w+)/i, "Successfully signed in via $1 ($2) as $3");
+        text = text.replace(/Thất bại khi đăng nhập qua\s+([^:]+):\s*(.*)/i, "Failed sign in via $1: $2");
+        text = text.replace(/Đăng nhập thất bại:\s*Sai mật khẩu hoặc tài khoản không tồn tại/i, "Login failed: Invalid credentials or account not found");
+        text = text.replace(/Tài khoản '([^']+)' đã bị khóa do nhập sai mật khẩu quá (\d+) lần/i, "Account '$1' locked after $2 failed login attempts");
+        text = text.replace(/Tài khoản '([^']+)' đã đổi mật khẩu thành công/i, "Account '$1' password changed successfully");
+
+        // Approval Patterns
+        text = text.replace(/Admin '([^']+)' đã PHÊ DUYỆT yêu cầu khởi tạo cho Developer '([^']+)'.\s*Bắt đầu kích hoạt Pulumi Engine./i, "Admin '$1' APPROVED provisioning request for Developer '$2'. Triggering Pulumi Engine.");
+        text = text.replace(/Admin '([^']+)' đã TỪ CHỐI yêu cầu khởi tạo của '([^']+)'.\s*Lý do:\s*(.*)/i, "Admin '$1' REJECTED provisioning request from '$2'. Reason: $3");
+
+        // RBAC Denials
+        text = text.replace(/Tài khoản Viewer không có quyền khởi tạo tài nguyên/i, "Viewer account is not permitted to provision resources");
+        text = text.replace(/Tài khoản Viewer không có quyền xóa tài nguyên/i, "Viewer account is not permitted to delete resources");
+        text = text.replace(/Chỉ có quyền xóa tài nguyên trên môi trường DEV/i, "Deletion is restricted to DEV environment only");
+
+        // Snapshots
+        text = text.replace(/Tạo bản snapshot '([^']+)' cho VM #(\d+)/i, "Created snapshot '$1' for VM #$2");
+        text = text.replace(/Khôi phục VM #(\d+) về snapshot '([^']+)'/i, "Rolled back VM #$1 to snapshot '$2'");
+        text = text.replace(/Xóa bản snapshot '([^']+)' của VM #(\d+)/i, "Deleted snapshot '$1' from VM #$2");
+
+        // Hotplug & Disks
+        text = text.replace(/Thay đổi nóng CPU:\s*(\d+)\s*cores,\s*RAM:\s*(\d+)\s*MB/i, "Live hotplug CPU: $1 cores, RAM: $2 MB");
+        text = text.replace(/Mở rộng đĩa\s+(\w+)\s+thêm\s+(\d+)\s*GB/i, "Expanded disk $1 by $2 GB");
+        text = text.replace(/Gắn đĩa phụ\s+(\w+)\s*\(([^)]+)\)/i, "Attached secondary disk $1 ($2)");
+        text = text.replace(/Gỡ bỏ đĩa phụ\s+(\w+)\s+khỏi VM #(\d+)/i, "Detached secondary disk $1 from VM #$2");
+
+        // Firewall
+        text = text.replace(/Thêm quy tắc firewall:\s*(.*)/i, "Added firewall rule: $1");
+        text = text.replace(/Xóa quy tắc firewall #(\d+)/i, "Deleted firewall rule #$1");
+
+        return text;
+    }
+
+    function formatAlertTitle(rawTitle, isEn) {
+        if (!rawTitle) return "";
+        if (!isEn) return rawTitle;
+        let text = String(rawTitle);
+        text = text.replace(/\[VƯỢT NGƯỠNG\]\s*/i, "[THRESHOLD EXCEEDED] ");
+        text = text.replace(/Storage Pool '([^']+)' \(([^)]+)\) vượt ngưỡng \(([^)]+)\)/i, "Storage Pool '$1' ($2) exceeds threshold ($3)");
+        text = text.replace(/Node '([^']+)' cạn kiệt RAM \(([^)]+)\)/i, "Node '$1' running out of RAM ($2)");
+        text = text.replace(/Node '([^']+)' quá tải CPU \(([^)]+)\)/i, "Node '$1' CPU overloaded ($2)");
+        return text;
+    }
+
+    function formatAlertMessage(rawMsg, isEn) {
+        if (!rawMsg) return "";
+        if (!isEn) return rawMsg;
+        let text = String(rawMsg);
+        text = text.replace(/Ổ đĩa\/Pool lưu trữ '([^']+)' trên node '([^']+)' đã đầy ([^,]+), vượt ngưỡng cho phép ([^.]+)\. Khuyến nghị dọn dẹp Snapshot cũ hoặc mở rộng LUN\/ZFS!/i, "Storage Pool '$1' on node '$2' is at $3 usage, exceeding safe threshold of $4. Recommended to clean up old snapshots or expand storage pool capacity!");
+        text = text.replace(/Dung lượng RAM trên node '([^']+)' đã sử dụng ([^,]+), vượt ngưỡng ([^.]+)\. Nguy cơ Out-Of-Memory \(OOM Killer\)!/i, "Memory usage on node '$1' reached $2, exceeding threshold of $3. Risk of Out-Of-Memory (OOM Killer)!");
+        text = text.replace(/Mức tải CPU trên node '([^']+)' đạt ([^,]+), vượt ngưỡng ([^.]+)\./i, "CPU load on node '$1' reached $2, exceeding threshold of $3.");
+        return text;
+    }
+
     async function loadAuditLogs() {
         if (!auditTableBody) return;
         try {
@@ -3077,16 +3239,17 @@ runcmd:
             const data = await res.json();
 
             if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+                const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
                 auditTableBody.innerHTML = data.data.map(log => {
                     const timeStr = log.timestamp ? new Date(log.timestamp).toLocaleString() : "-";
                     const isSuccess = log.status === "SUCCESS";
                     const isDenied = log.status === "DENIED";
 
                     const statusBadge = isSuccess 
-                        ? `<span class="tag-deployed"><i data-lucide="check-circle" class="badge-svg"></i> Thành Công</span>` 
+                        ? `<span class="tag-deployed"><i data-lucide="check-circle" class="badge-svg"></i> ${isEn ? 'Success' : 'Thành Công'}</span>` 
                         : (isDenied 
-                            ? `<span class="tag-env tag-env-pro"><i data-lucide="shield-alert" class="badge-svg"></i> Từ Chối (RBAC)</span>` 
-                            : `<span class="tag-env tag-env-stag"><i data-lucide="alert-triangle" class="badge-svg"></i> Thất Bại</span>`);
+                            ? `<span class="tag-env tag-env-pro"><i data-lucide="shield-alert" class="badge-svg"></i> ${isEn ? 'Denied (RBAC)' : 'Từ Chối (RBAC)'}</span>` 
+                            : `<span class="tag-env tag-env-stag"><i data-lucide="alert-triangle" class="badge-svg"></i> ${isEn ? 'Failed' : 'Thất Bại'}</span>`);
 
                     let roleBadge = `<span class="tag-env tag-env-pro"><i data-lucide="shield-check" class="badge-svg"></i> Admin</span>`;
                     if (log.role === "developer") {
@@ -3094,6 +3257,8 @@ runcmd:
                     } else if (log.role === "viewer") {
                         roleBadge = `<span class="tag-env tag-env-stag"><i data-lucide="eye" class="badge-svg"></i> Viewer</span>`;
                     }
+
+                    const formattedDetails = formatAuditDetails(log.details, isEn);
 
                     return `
                         <tr>
@@ -3106,14 +3271,15 @@ runcmd:
                             <td><strong style="color:#f8fafc;">${log.target || "-"}</strong></td>
                             <td>${log.environment ? renderEnvBadge(log.environment) : '<span class="text-muted">—</span>'}</td>
                             <td>${statusBadge}</td>
-                            <td style="font-size:12px; color:#94a3b8; line-height:1.4;">${log.details || "-"}</td>
+                            <td style="font-size:12px; color:#94a3b8; line-height:1.4;">${formattedDetails}</td>
                         </tr>
                     `;
                 }).join("");
 
                 if (window.lucide) window.lucide.createIcons();
             } else {
-                auditTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding: 24px;">Chưa có bản ghi nhật ký kiểm toán nào</td></tr>`;
+                const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
+                auditTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding: 24px;">${isEn ? 'No audit records recorded yet' : 'Chưa có bản ghi nhật ký kiểm toán nào'}</td></tr>`;
             }
         } catch (err) {
             auditTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-danger" style="padding: 24px;">Lỗi tải Audit Logs: ${err.message}</td></tr>`;
@@ -3149,18 +3315,19 @@ runcmd:
             if (quotaData.success && quotaData.data) {
                 const { quota, usage, isAdmin } = quotaData.data;
 
+                const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
                 if (isAdmin) {
-                    if (quotaVmDisplay) quotaVmDisplay.textContent = `${usage.vms} VMs (Không Giới Hạn)`;
+                    if (quotaVmDisplay) quotaVmDisplay.textContent = isEn ? `${usage.vms} VMs (Unlimited)` : `${usage.vms} VMs (Không Giới Hạn)`;
                     if (quotaVmBar) { quotaVmBar.style.width = "100%"; quotaVmBar.className = "progress-bar-fill"; }
-                    if (quotaVmFooter) quotaVmFooter.textContent = `Tài khoản Administrator không bị áp hạn mức`;
+                    if (quotaVmFooter) quotaVmFooter.textContent = isEn ? `Administrator account has unlimited quotas` : `Tài khoản Administrator không bị áp hạn mức`;
 
-                    if (quotaCpuDisplay) quotaCpuDisplay.textContent = `${usage.cores} vCPUs (Không Giới Hạn)`;
+                    if (quotaCpuDisplay) quotaCpuDisplay.textContent = isEn ? `${usage.cores} vCPUs (Unlimited)` : `${usage.cores} vCPUs (Không Giới Hạn)`;
                     if (quotaCpuBar) { quotaCpuBar.style.width = "100%"; quotaCpuBar.className = "progress-bar-fill"; }
-                    if (quotaCpuFooter) quotaCpuFooter.textContent = `Toàn quyền phân bổ CPU trên toàn cụm`;
+                    if (quotaCpuFooter) quotaCpuFooter.textContent = isEn ? `Full authority to allocate CPUs across cluster` : `Toàn quyền phân bổ CPU trên toàn cụm`;
 
-                    if (quotaRamDisplay) quotaRamDisplay.textContent = `${(usage.memoryMb / 1024).toFixed(1)} GB (Không Giới Hạn)`;
+                    if (quotaRamDisplay) quotaRamDisplay.textContent = isEn ? `${(usage.memoryMb / 1024).toFixed(1)} GB (Unlimited)` : `${(usage.memoryMb / 1024).toFixed(1)} GB (Không Giới Hạn)`;
                     if (quotaRamBar) { quotaRamBar.style.width = "100%"; quotaRamBar.className = "progress-bar-fill"; }
-                    if (quotaRamFooter) quotaRamFooter.textContent = `Toàn quyền phân bổ RAM trên toàn cụm`;
+                    if (quotaRamFooter) quotaRamFooter.textContent = isEn ? `Full authority to allocate RAM across cluster` : `Toàn quyền phân bổ RAM trên toàn cụm`;
                 } else {
                     // Quota VMs
                     const vmPercent = Math.min(100, Math.round((usage.vms / quota.maxVms) * 100));
@@ -3169,7 +3336,7 @@ runcmd:
                         quotaVmBar.style.width = `${vmPercent}%`;
                         quotaVmBar.className = `progress-bar-fill ${vmPercent >= 100 ? 'danger' : (vmPercent >= 75 ? 'warning' : '')}`;
                     }
-                    if (quotaVmFooter) quotaVmFooter.textContent = `Đã sử dụng ${usage.vms} trong tối đa ${quota.maxVms} VMs`;
+                    if (quotaVmFooter) quotaVmFooter.textContent = isEn ? `Using ${usage.vms} out of ${quota.maxVms} VMs` : `Đã sử dụng ${usage.vms} trong tối đa ${quota.maxVms} VMs`;
 
                     // Quota CPU
                     const cpuPercent = Math.min(100, Math.round((usage.cores / quota.maxCores) * 100));
@@ -3178,7 +3345,7 @@ runcmd:
                         quotaCpuBar.style.width = `${cpuPercent}%`;
                         quotaCpuBar.className = `progress-bar-fill ${cpuPercent >= 100 ? 'danger' : (cpuPercent >= 75 ? 'warning' : '')}`;
                     }
-                    if (quotaCpuFooter) quotaCpuFooter.textContent = `Đã cấp ${usage.cores} trong tối đa ${quota.maxCores} vCPUs`;
+                    if (quotaCpuFooter) quotaCpuFooter.textContent = isEn ? `Allocated ${usage.cores} of max ${quota.maxCores} vCPUs` : `Đã cấp ${usage.cores} trong tối đa ${quota.maxCores} vCPUs`;
 
                     // Quota RAM
                     const ramUsedGb = (usage.memoryMb / 1024).toFixed(1);
@@ -3189,7 +3356,7 @@ runcmd:
                         quotaRamBar.style.width = `${ramPercent}%`;
                         quotaRamBar.className = `progress-bar-fill ${ramPercent >= 100 ? 'danger' : (ramPercent >= 75 ? 'warning' : '')}`;
                     }
-                    if (quotaRamFooter) quotaRamFooter.textContent = `Đang dùng ${usage.memoryMb} MB trong tối đa ${quota.maxMemoryMb} MB RAM`;
+                    if (quotaRamFooter) quotaRamFooter.textContent = isEn ? `Using ${usage.memoryMb} MB of max ${quota.maxMemoryMb} MB RAM` : `Đang dùng ${usage.memoryMb} MB trong tối đa ${quota.maxMemoryMb} MB RAM`;
                 }
             }
         } catch (err) {
@@ -3215,24 +3382,24 @@ runcmd:
                     }
                 }
 
+                const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
                 if (requests.length === 0) {
-                    approvalsTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding: 24px;">Hiện không có yêu cầu phê duyệt nào</td></tr>`;
+                    approvalsTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding: 24px;">${isEn ? 'No pending approval requests in queue' : 'Hiện không có yêu cầu phê duyệt nào'}</td></tr>`;
                     return;
                 }
 
                 const isAdmin = currentAuthUser && currentAuthUser.role === "admin";
-
                 approvalsTableBody.innerHTML = requests.map(req => {
                     const timeStr = req.createdAt ? new Date(req.createdAt).toLocaleString() : "-";
                     const isPending = req.status === "PENDING";
                     const isApproved = req.status === "APPROVED";
                     const isRejected = req.status === "REJECTED";
 
-                    let statusBadge = `<span class="tag-env tag-env-stag"><i data-lucide="clock" class="badge-svg"></i> Chờ Admin Duyệt</span>`;
+                    let statusBadge = `<span class="tag-env tag-env-stag"><i data-lucide="clock" class="badge-svg"></i> ${isEn ? 'Pending Approval' : 'Chờ Admin Duyệt'}</span>`;
                     if (isApproved) {
-                        statusBadge = `<span class="tag-deployed"><i data-lucide="check-circle" class="badge-svg"></i> Đã Duyệt (${req.resolvedBy || 'Admin'})</span>`;
+                        statusBadge = `<span class="tag-deployed"><i data-lucide="check-circle" class="badge-svg"></i> ${isEn ? 'Approved' : 'Đã Duyệt'} (${req.resolvedBy || 'Admin'})</span>`;
                     } else if (isRejected) {
-                        statusBadge = `<span class="tag-env tag-env-pro"><i data-lucide="x-circle" class="badge-svg"></i> Bị Từ Chối</span>`;
+                        statusBadge = `<span class="tag-env tag-env-pro"><i data-lucide="x-circle" class="badge-svg"></i> ${isEn ? 'Rejected' : 'Bị Từ Chối'}</span>`;
                     }
 
                     const envStr = req.vms && req.vms[0] ? (req.vms[0].environment || "dev").toUpperCase() : "DEV";
@@ -3243,16 +3410,20 @@ runcmd:
                         actionHtml = `
                             <div style="display: flex; gap: 6px; justify-content: flex-end;">
                                 <button class="btn-action-approve" onclick="handleApprovalAction('${req.id}', 'approve')">
-                                    <i data-lucide="check" style="width:14px;height:14px;"></i> Phê Duyệt
+                                    <i data-lucide="check" style="width:14px;height:14px;"></i> ${isEn ? 'Approve' : 'Phê Duyệt'}
                                 </button>
                                 <button class="btn-action-reject" onclick="handleApprovalAction('${req.id}', 'reject')">
-                                    <i data-lucide="x" style="width:14px;height:14px;"></i> Từ Chối
+                                    <i data-lucide="x" style="width:14px;height:14px;"></i> ${isEn ? 'Reject' : 'Từ Chối'}
                                 </button>
                             </div>
                         `;
                     } else if (isRejected && req.rejectionReason) {
-                        actionHtml = `<span class="text-danger" style="font-size:11.5px;">Lý do: ${req.rejectionReason}</span>`;
+                        actionHtml = `<span class="text-danger" style="font-size:11.5px;">${isEn ? 'Reason: ' : 'Lý do: '}${req.rejectionReason}</span>`;
                     }
+
+                    const reasonTitle = req.reason === "ENV_RESTRICTION" 
+                        ? (isEn ? "🛡️ Environment Restriction" : "🛡️ Môi Trường Giới Hạn") 
+                        : (isEn ? "⚠️ Exceeded Quota Limit" : "⚠️ Vượt Hạn Mức Quota");
 
                     return `
                         <tr>
@@ -3267,7 +3438,7 @@ runcmd:
                             <td style="font-size:12px; line-height:1.5;">${vmsNames}</td>
                             <td>${renderEnvBadge(envStr.toLowerCase())}</td>
                             <td style="font-size:12px; color:#cbd5e1; max-width:240px; line-height:1.4;">
-                                <strong>${req.reason === "ENV_RESTRICTION" ? "🛡️ Môi Trường Giới Hạn" : "⚠️ Vượt Hạn Mức Quota"}</strong>
+                                <strong>${reasonTitle}</strong>
                                 <div style="font-size:11.5px; color:#94a3b8; margin-top:2px;">${req.reasonDetails}</div>
                             </td>
                             <td>${statusBadge}</td>
@@ -3285,12 +3456,16 @@ runcmd:
 
     window.handleApprovalAction = async (requestId, action) => {
         let rejectionReason = "";
+        const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
         if (action === "reject") {
-            const promptVal = prompt("Vui lòng nhập lý do từ chối yêu cầu này:", "Vượt ngân sách hoặc không đúng mục đích");
+            const promptVal = prompt(
+                isEn ? "Please enter rejection reason:" : "Vui lòng nhập lý do từ chối yêu cầu này:",
+                isEn ? "Budget limit exceeded or invalid scope" : "Vượt ngân sách hoặc không đúng mục đích"
+            );
             if (promptVal === null) return;
             rejectionReason = promptVal;
         } else {
-            if (!confirm(`Bạn có chắc chắn muốn PHÊ DUYỆT yêu cầu '${requestId}' và kích hoạt Pulumi Engine khởi tạo máy ảo không?`)) return;
+            if (!confirmDialog(`Bạn có chắc chắn muốn PHÊ DUYỆT yêu cầu '${requestId}' và kích hoạt Pulumi Engine khởi tạo máy ảo không?`, `Are you sure you want to APPROVE request '${requestId}' and trigger Pulumi Engine?`)) return;
         }
 
         try {
@@ -3324,13 +3499,14 @@ runcmd:
     window.destroyVm = async (stackName, isProtected) => {
         let force = false;
         if (isProtected) {
-            const proceed = confirm(
-                `⚠️ LƯU Ý BẢO VỆ: Máy ảo '${stackName}' từng có cờ Protection.\n\nNếu bạn ĐÃ tắt Protection thành 'No' trên Proxmox VE Web UI (hoặc muốn buộc xóa), hãy nhấn OK để tiến hành xóa.`
+            const proceed = confirmDialog(
+                `⚠️ LƯU Ý BẢO VỆ: Máy ảo '${stackName}' từng có cờ Protection.\n\nNếu bạn ĐÃ tắt Protection thành 'No' trên Proxmox VE Web UI (hoặc muốn buộc xóa), hãy nhấn OK để tiến hành xóa.`,
+                `⚠️ PROTECTION WARNING: Virtual machine '${stackName}' previously had Protection flag enabled.\n\nIf you have disabled Protection on Proxmox VE Web UI (or wish to force delete), press OK to proceed.`
             );
             if (!proceed) return;
             force = true;
         } else {
-            if (!confirm(`Bạn có chắc chắn muốn xóa và hủy tài nguyên cho '${stackName}' không?`)) return;
+            if (!confirmDialog(`Bạn có chắc chắn muốn xóa và hủy tài nguyên cho '${stackName}' không?`, `Are you sure you want to delete and destroy resources for '${stackName}'?`)) return;
         }
 
         try {
@@ -3427,8 +3603,11 @@ runcmd:
                         clusterAlertBanner.classList.remove("alert-critical");
                     }
 
+                    const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
                     if (alertBannerTitle) {
-                        alertBannerTitle.textContent = `🚨 Phát hiện ${activeCount} cảnh báo ngưỡng tài nguyên cụm!`;
+                        alertBannerTitle.textContent = isEn 
+                            ? `🚨 ${activeCount} cluster resource threshold alert(s) detected!`
+                            : `🚨 Phát hiện ${activeCount} cảnh báo ngưỡng tài nguyên cụm!`;
                     }
                     if (alertBannerDetails) {
                         const summaries = activeAlerts.map(a => `${a.resourceName} (${a.currentValue}${a.unit} ≥ ${a.thresholdValue}${a.unit})`).join(" • ");
@@ -3440,10 +3619,11 @@ runcmd:
             }
 
             // 3. Render danh sách Active Alerts trong Modal
+            const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
             if (activeAlertSummaryText) {
                 activeAlertSummaryText.textContent = activeCount > 0
-                    ? `Hiện có ${activeCount} tài nguyên đang vượt ngưỡng giám sát an toàn:`
-                    : `✅ Toàn bộ tài nguyên trong cụm đang ở mức an toàn (Storage < ${thresholds.storagePercent}%, CPU < ${thresholds.cpuPercent}%, RAM < ${thresholds.ramPercent}%).`;
+                    ? (isEn ? `Currently ${activeCount} resource(s) exceed safe monitoring thresholds:` : `Hiện có ${activeCount} tài nguyên đang vượt ngưỡng giám sát an toàn:`)
+                    : (isEn ? `✅ All cluster resources are currently within safe limits (Storage < ${thresholds.storagePercent}%, CPU < ${thresholds.cpuPercent}%, RAM < ${thresholds.ramPercent}%).` : `✅ Toàn bộ tài nguyên trong cụm đang ở mức an toàn (Storage < ${thresholds.storagePercent}%, CPU < ${thresholds.cpuPercent}%, RAM < ${thresholds.ramPercent}%).`);
             }
 
             if (activeAlertsContainer) {
@@ -3451,31 +3631,34 @@ runcmd:
                     activeAlertsContainer.innerHTML = `
                         <div class="card text-center text-muted" style="padding: 28px 16px;">
                             <i data-lucide="shield-check" style="width: 36px; height: 36px; color: #22c55e; margin: 0 auto 10px; display: block;"></i>
-                            <h4 style="color: #f8fafc; font-size: 14px; margin-bottom: 4px;">Hạ Tầng Hoạt Động Bình Thường</h4>
-                            <p style="font-size: 12px; margin: 0;">Không có Storage Pool nào vượt quá ${thresholds.storagePercent}% hoặc Node bị quá tải.</p>
+                            <h4 style="color: #f8fafc; font-size: 14px; margin-bottom: 4px;">${isEn ? 'Infrastructure Operating Normally' : 'Hạ Tầng Hoạt Động Bình Thường'}</h4>
+                            <p style="font-size: 12px; margin: 0;">${isEn ? `No storage pools exceed ${thresholds.storagePercent}% or overloaded nodes.` : `Không có Storage Pool nào vượt quá ${thresholds.storagePercent}% hoặc Node bị quá tải.`}</p>
                         </div>
                     `;
                 } else {
                     activeAlertsContainer.innerHTML = activeAlerts.map(alert => {
                         const isCritical = alert.severity === "CRITICAL";
                         const timeStr = new Date(alert.timestamp).toLocaleTimeString();
+                        const localizedTitle = formatAlertTitle(alert.title, isEn);
+                        const localizedMsg = formatAlertMessage(alert.message, isEn);
+
                         return `
                             <div class="alert-card-item ${isCritical ? 'alert-critical' : 'alert-warning'}">
                                 <div class="alert-card-info">
                                     <div class="alert-card-title">
                                         <span>${isCritical ? '🚨' : '⚠️'}</span>
-                                        <span>${alert.title}</span>
+                                        <span>${localizedTitle}</span>
                                         <span class="badge-storage-danger">${alert.severity}</span>
                                     </div>
-                                    <div class="alert-card-desc">${alert.message}</div>
+                                    <div class="alert-card-desc">${localizedMsg}</div>
                                     <div class="alert-card-meta">
                                         <span><i data-lucide="server" style="width:12px;height:12px;display:inline;"></i> Node: <strong>${alert.node}</strong></span>
-                                        <span><i data-lucide="clock" style="width:12px;height:12px;display:inline;"></i> Phát hiện: ${timeStr}</span>
+                                        <span><i data-lucide="clock" style="width:12px;height:12px;display:inline;"></i> ${isEn ? 'Detected:' : 'Phát hiện:'} ${timeStr}</span>
                                     </div>
                                 </div>
                                 <div class="alert-card-actions">
-                                    <button class="btn-dismiss-alert" onclick="dismissClusterAlert('${alert.id}')" title="Ẩn cảnh báo này">
-                                        <i data-lucide="check" class="btn-icon-xs"></i> Đã xem
+                                    <button class="btn-dismiss-alert" onclick="dismissClusterAlert('${alert.id}')" title="${isEn ? 'Dismiss this alert' : 'Ẩn cảnh báo này'}">
+                                        <i data-lucide="check" class="btn-icon-xs"></i> ${isEn ? 'Dismiss' : 'Đã xem'}
                                     </button>
                                 </div>
                             </div>
@@ -3487,7 +3670,7 @@ runcmd:
             // 4. Render Alert History
             if (alertHistoryTableBody) {
                 if (!recentHistory || recentHistory.length === 0) {
-                    alertHistoryTableBody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding: 20px;">Chưa có lịch sử cảnh báo nào được ghi nhận</td></tr>`;
+                    alertHistoryTableBody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding: 20px;">${isEn ? 'No alert history recorded yet' : 'Chưa có lịch sử cảnh báo nào được ghi nhận'}</td></tr>`;
                 } else {
                     alertHistoryTableBody.innerHTML = recentHistory.map(hist => {
                         const timeStr = new Date(hist.timestamp).toLocaleString();
@@ -3505,7 +3688,7 @@ runcmd:
                                 <td style="font-size:11.5px; color:#94a3b8;">${timeStr}</td>
                                 <td><strong>${hist.resourceName}</strong></td>
                                 <td><code>${hist.node}</code></td>
-                                <td><strong style="color:${hist.currentValue >= hist.thresholdValue ? '#ef4444' : '#22c55e'}">${hist.currentValue}${hist.unit}</strong> (Ngưỡng: ${hist.thresholdValue}${hist.unit})</td>
+                                <td><strong style="color:${hist.currentValue >= hist.thresholdValue ? '#ef4444' : '#22c55e'}">${hist.currentValue}${hist.unit}</strong> (${isEn ? 'Threshold' : 'Ngưỡng'}: ${hist.thresholdValue}${hist.unit})</td>
                                 <td><span class="tag-env tag-env-${hist.severity === 'CRITICAL' ? 'pro' : 'stag'}">${hist.severity}</span></td>
                                 <td>${statusBadge}</td>
                             </tr>
@@ -3785,8 +3968,13 @@ runcmd:
     // Open Hotplug Modal
     window.openVmHotplug = async (node, vmid, vmname) => {
         currentHotplugVm = { node, vmid, vmname };
-        document.getElementById("hotplugModalTitle").textContent = `Cấu Hình Nóng & Đa Ổ Đĩa: ${vmname || `VM #${vmid}`}`;
-        document.getElementById("hotplugModalSubtitle").textContent = `Node: ${node} | VMID: ${vmid} — Thay đổi vCPU, RAM và Gắn/Mở rộng đĩa tức thời`;
+        const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
+        document.getElementById("hotplugModalTitle").textContent = isEn 
+            ? `Live Hotplug & Multi-Disk: ${vmname || `VM #${vmid}`}` 
+            : `Cấu Hình Nóng & Đa Ổ Đĩa: ${vmname || `VM #${vmid}`}`;
+        document.getElementById("hotplugModalSubtitle").textContent = isEn 
+            ? `Node: ${node} | VMID: ${vmid} — Live vCPU, RAM adjustments & Multi-Disk management` 
+            : `Node: ${node} | VMID: ${vmid} — Thay đổi vCPU, RAM và Gắn/Mở rộng đĩa tức thời`;
         hotplugModal.classList.remove("hidden");
 
         await loadVmHardwareDetails();
@@ -3836,8 +4024,9 @@ runcmd:
 
             // 3. Render Attached Disks Table
             if (hotplugDisksTableBody) {
+                const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
                 if (!hw.disks || hw.disks.length === 0) {
-                    hotplugDisksTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted" style="padding: 20px;">Không tìm thấy đĩa nào</td></tr>`;
+                    hotplugDisksTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted" style="padding: 20px;">${isEn ? 'No virtual disks attached' : 'Không tìm thấy đĩa nào'}</td></tr>`;
                 } else {
                     hotplugDisksTableBody.innerHTML = hw.disks.map(disk => {
                         const isBoot = disk.isBoot;
@@ -3847,17 +4036,17 @@ runcmd:
 
                         let actions = `
                             <div style="display:flex; justify-content:flex-end; gap:6px; align-items:center;">
-                                <button type="button" class="btn-action-sm" style="border-color:rgba(56,189,248,0.3); color:#38bdf8;" onclick="promptResizeDisk('${node}', ${vmid}', '${disk.slot}', '${disk.size}')" title="Mở rộng dung lượng đĩa trực tuyến">
+                                <button type="button" class="btn-action-sm" style="border-color:rgba(56,189,248,0.3); color:#38bdf8;" onclick="promptResizeDisk('${node}', ${vmid}, '${disk.slot}', '${disk.size}')" title="${window.t('hotplug.resize_btn')}">
                                     <i data-lucide="maximize-2" class="btn-icon-xs"></i>
-                                    <span>Mở Rộng</span>
+                                    <span>${window.t('hotplug.resize_btn')}</span>
                                 </button>
                         `;
 
                         if (!isBoot) {
                             actions += `
-                                <button type="button" class="btn-danger-sm" onclick="detachSecondaryDisk('${node}', ${vmid}', '${disk.slot}')" title="Gỡ đĩa phụ này">
+                                <button type="button" class="btn-danger-sm" onclick="detachSecondaryDisk('${node}', ${vmid}, '${disk.slot}')" title="${window.t('hotplug.detach_btn')}">
                                     <i data-lucide="trash-2" class="btn-icon-xs"></i>
-                                    <span>Gỡ Đĩa</span>
+                                    <span>${window.t('hotplug.detach_btn')}</span>
                                 </button>
                             `;
                         }
@@ -3996,7 +4185,7 @@ runcmd:
 
     // Detach Secondary Disk
     window.detachSecondaryDisk = async (node, vmid, slot) => {
-        if (!confirm(`🗑️ Bạn có chắc chắn muốn GỠ BỎ ổ đĩa phụ '${slot}' khỏi máy ảo #${vmid} không?`)) return;
+        if (!confirmDialog(`🗑️ Bạn có chắc chắn muốn GỠ BỎ ổ đĩa phụ '${slot}' khỏi máy ảo #${vmid} không?`, `🗑️ Are you sure you want to DETACH secondary disk '${slot}' from VM #${vmid}?`)) return;
 
         showToast(`💾 Đang gỡ bỏ đĩa ${slot}...`);
         try {
@@ -4020,6 +4209,28 @@ runcmd:
     // Tự động load dữ liệu Proxmox & Cảnh báo ngay khi mở trang
     loadClusterResources();
     loadClusterAlerts();
+
+    // Lắng nghe sự kiện chuyển đổi ngôn ngữ để render lại tức thì các card động
+    window.addEventListener("portal_language_changed", () => {
+        if (cachedClusterData && cachedClusterData.length > 0) {
+            renderClusterView(cachedClusterData, currentSearchTerm);
+        }
+        if (typeof updateNodeSelection === "function") {
+            updateNodeSelection();
+        }
+        if (typeof loadVms === "function") {
+            loadVms();
+        }
+        if (typeof loadAuditLogs === "function") {
+            loadAuditLogs();
+        }
+        if (typeof loadQuotasAndApprovals === "function") {
+            loadQuotasAndApprovals();
+        }
+        if (typeof loadClusterAlerts === "function") {
+            loadClusterAlerts();
+        }
+    });
 
     // Chu kỳ tự động kiểm tra cảnh báo nền mỗi 20 giây
     setInterval(loadClusterAlerts, 20000);
