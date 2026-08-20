@@ -353,6 +353,11 @@
 
             // Toast Messages & Confirmations
             "toast.lang_changed": "Đã chuyển sang Tiếng Việt 🇻🇳",
+            "toast.welcome_login": "Chào mừng {0} ({1}) đăng nhập thành công!",
+            "toast.logged_out": "Đã đăng xuất an toàn khỏi hệ thống.",
+            "toast.password_changed": "🎉 Đổi mật khẩu thành công! Mật khẩu mới có hiệu lực ngay.",
+            "toast.password_mismatch": "Mật khẩu xác nhận không khớp!",
+            "toast.sso_failed": "⛔ Đăng nhập thất bại: {0}",
             "toast.copied_ip": "Đã sao chép IP: {0}",
             "toast.copied_log": "Đã sao chép toàn bộ log!",
             "toast.deploy_success": "Khởi tạo máy ảo thành công!",
@@ -767,6 +772,11 @@
 
             // Toast Messages & Confirmations
             "toast.lang_changed": "Switched to English 🇬🇧",
+            "toast.welcome_login": "Welcome {0} ({1}), sign in successful!",
+            "toast.logged_out": "Signed out safely from the system.",
+            "toast.password_changed": "🎉 Password changed successfully! Your new password is now active.",
+            "toast.password_mismatch": "Password confirmation does not match!",
+            "toast.sso_failed": "⛔ Sign in failed: {0}",
             "toast.copied_ip": "Copied IP: {0}",
             "toast.copied_log": "Copied full log output!",
             "toast.deploy_success": "VM deployed successfully!",
@@ -860,7 +870,7 @@
         }
 
         // Highlight active lang item
-        document.querySelectorAll(".lang-item").forEach(item => {
+        document.querySelectorAll(".lang-item, .btn-login-lang").forEach(item => {
             if (item.getAttribute("data-lang") === currentLang) {
                 item.classList.add("active");
             } else {

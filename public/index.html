@@ -9,7 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="style.css?v=20260819-1">
+    <link rel="stylesheet" href="style.css?v=20260820-23">
 </head>
 <body>
     <div class="app-container">
@@ -1049,12 +1049,22 @@
     <!-- Modal Đăng Nhập Hệ Thống (Login Modal Backdrop) -->
     <div id="loginModal" class="login-modal-backdrop hidden">
         <div class="login-card">
+            <!-- Login Modal Language Switcher -->
+            <div class="login-lang-wrapper">
+                <button type="button" class="btn-login-lang active" data-lang="vi" onclick="setLanguage('vi')" title="Tiếng Việt">
+                    <span>🇻🇳</span> <span>VI</span>
+                </button>
+                <button type="button" class="btn-login-lang" data-lang="en" onclick="setLanguage('en')" title="English">
+                    <span>🇬🇧</span> <span>EN</span>
+                </button>
+            </div>
+
             <div class="login-header">
                 <div class="login-logo">
                     <i data-lucide="shield-check" class="login-logo-svg"></i>
                 </div>
-                <h2>Xác Thực & Đăng Nhập</h2>
-                <p>Đăng nhập tập trung để quản trị hạ tầng Proxmox VE</p>
+                <h2 data-i18n="login.title">Xác Thực & Đăng Nhập</h2>
+                <p data-i18n="login.subtitle">Đăng nhập tập trung để quản trị hạ tầng Proxmox VE</p>
             </div>
 
             <!-- SSO Authentication Error Banner (nếu có lỗi trả về từ Callback) -->
@@ -1067,56 +1077,56 @@
             <div id="ssoSection" class="sso-section">
                 <div class="sso-title" style="font-size:12px; color:#94a3b8; margin-bottom:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">
                     <i data-lucide="key" class="field-icon" style="color:#38bdf8;"></i>
-                    <span>Đăng Nhập Tập Trung (SSO / OIDC):</span>
+                    <span data-i18n="login.sso_title">Đăng Nhập Tập Trung (SSO / OIDC):</span>
                 </div>
                 <div id="ssoButtonsContainer" class="sso-buttons-grid">
                     <!-- Rendered dynamically -->
                     <button type="button" class="btn-sso btn-sso-google" onclick="initiateSsoLogin('google')">
                         <svg class="sso-icon-svg" viewBox="0 0 24 24" width="18" height="18"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
-                        <span>Google Workspace</span>
+                        <span data-i18n="login.sso_google">Google Workspace</span>
                     </button>
                     <button type="button" class="btn-sso btn-sso-github" onclick="initiateSsoLogin('github')">
                         <svg class="sso-icon-svg" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-                        <span>GitHub SSO</span>
+                        <span data-i18n="login.sso_github">GitHub SSO</span>
                     </button>
                     <button type="button" class="btn-sso btn-sso-oidc" onclick="initiateSsoLogin('oidc')">
                         <i data-lucide="shield" class="btn-icon-xs" style="color:#a855f7;"></i>
-                        <span>Keycloak / Authelia</span>
+                        <span data-i18n="login.sso_oidc">Keycloak / Authelia</span>
                     </button>
                 </div>
             </div>
 
             <!-- SSO / Local Divider -->
             <div class="sso-divider">
-                <span>HOẶC TÀI KHOẢN NỘI BỘ (BREAK-GLASS)</span>
+                <span data-i18n="login.or_local">HOẶC TÀI KHOẢN NỘI BỘ (BREAK-GLASS)</span>
             </div>
 
             <!-- Demo Quick Accounts Selector -->
             <div class="demo-accounts-box" id="demoAccountsBox">
                 <div class="demo-title">
                     <i data-lucide="users" class="field-icon"></i>
-                    <span>Tài khoản truy cập nhanh (Demo RBAC):</span>
+                    <span data-i18n="login.quick_accounts">Tài khoản truy cập nhanh (Demo RBAC):</span>
                 </div>
                 <div class="demo-accounts-grid">
                     <button type="button" class="btn-demo-user active" onclick="fillLoginForm('admin')">
                         <span class="demo-avatar"><i data-lucide="shield-check" class="demo-icon-svg"></i></span>
                         <div class="demo-user-info">
                             <strong>admin</strong>
-                            <small>Administrator</small>
+                            <small data-i18n="login.admin_role">Administrator</small>
                         </div>
                     </button>
                     <button type="button" class="btn-demo-user" onclick="fillLoginForm('developer')">
                         <span class="demo-avatar"><i data-lucide="code-2" class="demo-icon-svg"></i></span>
                         <div class="demo-user-info">
                             <strong>developer</strong>
-                            <small>Dev (Chỉ DEV)</small>
+                            <small data-i18n="login.dev_role">Dev (Chỉ DEV)</small>
                         </div>
                     </button>
                     <button type="button" class="btn-demo-user" onclick="fillLoginForm('viewer')">
                         <span class="demo-avatar"><i data-lucide="eye" class="demo-icon-svg"></i></span>
                         <div class="demo-user-info">
                             <strong>viewer</strong>
-                            <small>Viewer (Chỉ xem)</small>
+                            <small data-i18n="login.viewer_role">Viewer (Chỉ xem)</small>
                         </div>
                     </button>
                 </div>
@@ -1126,18 +1136,18 @@
                 <div class="form-group">
                     <label for="loginUsername">
                         <i data-lucide="user" class="field-icon"></i>
-                        <span>Tên đăng nhập</span>
+                        <span data-i18n="login.username">Tên đăng nhập</span>
                     </label>
-                    <input type="text" id="loginUsername" name="username" value="admin" placeholder="Nhập username..." required>
+                    <input type="text" id="loginUsername" name="username" value="admin" data-i18n-placeholder="login.username_placeholder" placeholder="Nhập username..." required>
                 </div>
 
                 <div class="form-group">
                     <label for="loginPassword">
                         <i data-lucide="lock" class="field-icon"></i>
-                        <span>Mật khẩu</span>
+                        <span data-i18n="login.password">Mật khẩu</span>
                     </label>
                     <div style="position: relative; display: flex; align-items: center;">
-                        <input type="password" id="loginPassword" name="password" placeholder="Nhập mật khẩu..." required style="padding-right: 36px;">
+                        <input type="password" id="loginPassword" name="password" data-i18n-placeholder="login.password_placeholder" placeholder="Nhập mật khẩu..." required style="padding-right: 36px;">
                         <button type="button" id="btnToggleLoginPass" style="position: absolute; right: 8px; background: none; border: none; color: #94a3b8; cursor: pointer; display: flex; align-items: center;" title="Hiện / Ẩn mật khẩu">
                             <i data-lucide="eye" style="width: 16px; height: 16px;"></i>
                         </button>
@@ -1146,13 +1156,13 @@
 
                 <div id="loginErrorMsg" class="login-error-alert hidden">
                     <i data-lucide="alert-circle" class="btn-icon-sm"></i>
-                    <span id="loginErrorText">Tên đăng nhập hoặc mật khẩu không chính xác!</span>
+                    <span id="loginErrorText" data-i18n="login.error_default">Tên đăng nhập hoặc mật khẩu không chính xác!</span>
                 </div>
 
                 <button type="submit" id="btnSubmitLogin" class="btn-primary login-btn">
                     <span class="spinner hidden"></span>
                     <i data-lucide="log-in" class="btn-icon-sm"></i>
-                    <span>Đăng Nhập</span>
+                    <span data-i18n="login.submit">Đăng Nhập</span>
                 </button>
             </form>
         </div>
@@ -1164,7 +1174,7 @@
             <div class="modal-header">
                 <div class="card-title-group">
                     <i data-lucide="key" class="icon-accent"></i>
-                    <h3>Đổi Mật Khẩu Tài Khoản</h3>
+                    <h3 data-i18n="password.title">Đổi Mật Khẩu Tài Khoản</h3>
                 </div>
                 <button id="btnClosePasswordModal" class="btn-icon-close">
                     <i data-lucide="x" class="btn-icon-sm"></i>
@@ -1173,23 +1183,23 @@
             <div class="modal-body">
                 <form id="changePasswordForm">
                     <div class="form-group">
-                        <label for="oldPasswordInput">Mật Khẩu Hiện Tại <span class="required-star">*</span></label>
-                        <input type="password" id="oldPasswordInput" required placeholder="Nhập mật khẩu hiện tại...">
+                        <label for="oldPasswordInput"><span data-i18n="password.current">Mật Khẩu Hiện Tại</span> <span class="required-star">*</span></label>
+                        <input type="password" id="oldPasswordInput" required data-i18n-placeholder="password.current_placeholder" placeholder="Nhập mật khẩu hiện tại...">
                     </div>
                     <div class="form-group">
-                        <label for="newPasswordInput">Mật Khẩu Mới <span class="required-star">*</span></label>
-                        <input type="password" id="newPasswordInput" required placeholder="Nhập mật khẩu mới (>= 4 ký tự)...">
+                        <label for="newPasswordInput"><span data-i18n="password.new">Mật Khẩu Mới</span> <span class="required-star">*</span></label>
+                        <input type="password" id="newPasswordInput" required data-i18n-placeholder="password.new_placeholder" placeholder="Nhập mật khẩu mới (>= 4 ký tự)...">
                     </div>
                     <div class="form-group">
-                        <label for="confirmPasswordInput">Xác Nhận Mật Khẩu Mới <span class="required-star">*</span></label>
-                        <input type="password" id="confirmPasswordInput" required placeholder="Nhập lại mật khẩu mới...">
+                        <label for="confirmPasswordInput"><span data-i18n="password.confirm">Xác Nhận Mật Khẩu Mới</span> <span class="required-star">*</span></label>
+                        <input type="password" id="confirmPasswordInput" required data-i18n-placeholder="password.confirm_placeholder" placeholder="Nhập lại mật khẩu mới...">
                     </div>
                     <div id="changePassError" class="login-error-alert hidden" style="margin-bottom:12px;"></div>
                     <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
-                        <button type="button" id="btnCancelChangePassword" class="btn-secondary">Hủy</button>
+                        <button type="button" id="btnCancelChangePassword" class="btn-secondary" data-i18n="password.cancel">Hủy</button>
                         <button type="submit" id="btnSubmitChangePassword" class="btn-primary">
                             <span class="spinner hidden"></span>
-                            <span>Cập Nhật Mật Khẩu</span>
+                            <span data-i18n="password.submit">Cập Nhật Mật Khẩu</span>
                         </button>
                     </div>
                 </form>
@@ -1542,20 +1552,20 @@
         <i data-lucide="chevron-up" class="btn-icon"></i>
     </button>
 
-    <script src="i18n.js?v=20260820-22"></script>
-    <script src="js/utils.js?v=20260820-22"></script>
-    <script src="js/state.js?v=20260820-22"></script>
-    <script src="js/auth.js?v=20260820-22"></script>
-    <script src="js/console.js?v=20260820-22"></script>
-    <script src="js/alerts.js?v=20260820-22"></script>
-    <script src="js/cluster.js?v=20260820-22"></script>
-    <script src="js/snapshots.js?v=20260820-22"></script>
-    <script src="js/firewall.js?v=20260820-22"></script>
-    <script src="js/hardware.js?v=20260820-22"></script>
-    <script src="js/wizard.js?v=20260820-22"></script>
-    <script src="js/vms.js?v=20260820-22"></script>
-    <script src="js/approvals.js?v=20260820-22"></script>
-    <script src="js/audit.js?v=20260820-22"></script>
-    <script src="js/main.js?v=20260820-22"></script>
+    <script src="i18n.js?v=20260820-25"></script>
+    <script src="js/utils.js?v=20260820-25"></script>
+    <script src="js/state.js?v=20260820-25"></script>
+    <script src="js/auth.js?v=20260820-25"></script>
+    <script src="js/console.js?v=20260820-25"></script>
+    <script src="js/alerts.js?v=20260820-25"></script>
+    <script src="js/cluster.js?v=20260820-25"></script>
+    <script src="js/snapshots.js?v=20260820-25"></script>
+    <script src="js/firewall.js?v=20260820-25"></script>
+    <script src="js/hardware.js?v=20260820-25"></script>
+    <script src="js/wizard.js?v=20260820-25"></script>
+    <script src="js/vms.js?v=20260820-25"></script>
+    <script src="js/approvals.js?v=20260820-25"></script>
+    <script src="js/audit.js?v=20260820-25"></script>
+    <script src="js/main.js?v=20260820-25"></script>
 </body>
 </html>
