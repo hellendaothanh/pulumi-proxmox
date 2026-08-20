@@ -319,7 +319,7 @@ app.get("/api/auth/callback/:provider", async (req, res) => {
             details: `Đăng nhập thành công qua ${user.providerName} (${user.email || user.username}) với vai trò ${user.role.toUpperCase()}`,
         });
 
-        broadcastLog(`🔑 [SSO LOGIN] Người dùng '${user.displayName}' (${user.email || user.username}) đã đăng nhập qua ${user.providerName} [${user.role.toUpperCase()}]`);
+        broadcastLog(`🔑 [SSO LOGIN] User '${user.displayName}' (${user.email || user.username}) signed in via ${user.providerName} [${user.role.toUpperCase()}]`);
 
         // Chuyển hướng người dùng về trang chủ kèm token
         const cleanReturnUrl = returnUrl.startsWith("/") ? returnUrl : "/";
@@ -354,7 +354,7 @@ app.post("/api/auth/login", (req, res) => {
             status: "SUCCESS",
             details: `Đăng nhập thành công qua tài khoản nội bộ: ${result.user.role.toUpperCase()}`
         });
-        broadcastLog(`🔑 [LOCAL LOGIN] Tài khoản '${result.user.username}' (${result.user.role.toUpperCase()}) đăng nhập thành công.`);
+        broadcastLog(`🔑 [LOCAL LOGIN] User '${result.user.username}' (${result.user.role.toUpperCase()}) signed in successfully.`);
         return res.json({ success: true, data: result });
     } catch (errAuth: any) {
         // Fallback kiểm tra legacy users nếu có
@@ -458,7 +458,7 @@ app.post("/api/auth/logout", (req, res) => {
         }
     }
 
-    res.json({ success: true, message: "Đăng xuất thành công." });
+    res.json({ success: true, message: "Signed out successfully." });
 });
 
 // 7. Đổi mật khẩu phiên hiện tại (Runtime Password Change & Persist to .env)
@@ -517,7 +517,7 @@ app.post("/api/auth/change-password", (req, res) => {
         details: `Người dùng '${authUser.username}' đã đổi mật khẩu thành công và lưu vào .env.`
     });
 
-    res.json({ success: true, message: "Đã đổi mật khẩu thành công! Mật khẩu mới đã được lưu vào file .env và có hiệu lực vĩnh viễn." });
+    res.json({ success: true, message: "Password changed successfully! New password saved to .env." });
 });
 
 // Endpoint lấy danh sách Audit Logs
@@ -583,8 +583,8 @@ app.post("/api/alerts/config", (req, res) => {
             status: "SUCCESS",
             details: `Cập nhật cấu hình cảnh báo tài nguyên cụm Proxmox`,
         });
-        broadcastLog(`⚙️ [Alert Engine] [User: ${authUser.username}] Đã cập nhật ngưỡng cảnh báo (Storage: ${updated.storagePercent}%, CPU: ${updated.cpuPercent}%, RAM: ${updated.ramPercent}%)`);
-        res.json({ success: true, message: "Đã cập nhật cấu hình cảnh báo thành công!", data: updated });
+        broadcastLog(`⚙️ [Alert Engine] [User: ${authUser.username}] Alert thresholds updated (Storage: ${updated.storagePercent}%, CPU: ${updated.cpuPercent}%, RAM: ${updated.ramPercent}%)`);
+        res.json({ success: true, message: "Alert configuration updated successfully!", data: updated });
     } catch (error: any) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -594,7 +594,7 @@ app.post("/api/alerts/config", (req, res) => {
 app.post("/api/alerts/test", async (req, res) => {
     const authUser = getAuthUser(req);
     if (!authUser || authUser.role === "viewer") {
-        return res.status(403).json({ success: false, error: "[RBAC DENIED] Tài khoản Viewer không có quyền gửi thông báo thử nghiệm." });
+        return res.status(403).json({ success: false, error: "[RBAC DENIED] Viewer account is not permitted to send test alerts." });
     }
 
     try {
@@ -607,7 +607,7 @@ app.post("/api/alerts/test", async (req, res) => {
             status: (result.telegramSuccess || result.webhookSuccess) ? "SUCCESS" : "FAILED",
             details: result.details,
         });
-        res.json({ success: true, message: "Đã gửi thông báo thử nghiệm!", data: result });
+        res.json({ success: true, message: "Test notification sent successfully!", data: result });
     } catch (error: any) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -618,7 +618,7 @@ app.post("/api/alerts/check", async (req, res) => {
     try {
         const triggered = await alertService.checkClusterMetrics();
         const status = alertService.getStatus();
-        res.json({ success: true, message: `Đã quét xong cụm. Phát hiện ${status.activeCount} cảnh báo hoạt động.`, data: status });
+        res.json({ success: true, message: `Cluster scan completed. Detected ${status.activeCount} active alert(s).`, data: status });
     } catch (error: any) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -627,9 +627,9 @@ app.post("/api/alerts/check", async (req, res) => {
 // 5. Tạm ẩn / Đánh dấu đã xem cảnh báo
 app.post("/api/alerts/dismiss", (req, res) => {
     const { id } = req.body;
-    if (!id) return res.status(400).json({ success: false, error: "Thiếu alert id." });
+    if (!id) return res.status(400).json({ success: false, error: "Missing alert id." });
     const success = alertService.dismissAlert(id);
-    res.json({ success, message: success ? "Đã tắt cảnh báo." : "Không tìm thấy cảnh báo." });
+    res.json({ success, message: success ? "Alert dismissed." : "Alert not found." });
 });
 
 // Endpoint lấy danh sách Stacks / VMs
@@ -798,9 +798,9 @@ async function executeVmDeployment(vms: VmConfig[], executor: { username: string
     const stackNames = vms.map(v => `vm-${v.name.toLowerCase().replace(/[^a-z0-9-_]/g, "-")}`);
 
     if (isBatch) {
-        broadcastLog(`\n[CLUSTER] [User: ${executor.username} (${executor.role.toUpperCase()})] Bắt đầu khởi tạo cụm ${vms.length} máy ảo: ${vms.map(v => `${v.name} (@${v.nodeName})`).join(", ")}...`);
+        broadcastLog(`\n[CLUSTER] [User: ${executor.username} (${executor.role.toUpperCase()})] Initiating cluster provisioning of ${vms.length} VMs: ${vms.map(v => `${v.name} (@${v.nodeName})`).join(", ")}...`);
     } else {
-        broadcastLog(`\n[CREATE] [User: ${executor.username} (${executor.role.toUpperCase()})] Bắt đầu khởi tạo stack '${stackNames[0]}' cho máy ảo ${vms[0].name}...`);
+        broadcastLog(`\n[CREATE] [User: ${executor.username} (${executor.role.toUpperCase()})] Initiating stack '${stackNames[0]}' for VM ${vms[0].name}...`);
     }
 
     for (let i = 0; i < vms.length; i++) {
@@ -811,7 +811,7 @@ async function executeVmDeployment(vms: VmConfig[], executor: { username: string
         // Tự động phân giải datastore phù hợp với từng Node
         config.datastoreId = await resolveDatastoreForNode(config.nodeName, config.datastoreId);
 
-        broadcastLog(`\n[PULUMI] ${prefix} Đang khởi tạo stack '${stackName}' trên Node '${config.nodeName}' (Storage: ${config.datastoreId})...`);
+        broadcastLog(`\n[PULUMI] ${prefix} Provisioning stack '${stackName}' on Node '${config.nodeName}' (Storage: ${config.datastoreId})...`);
 
         try {
             const program = createVmProgram(config);
@@ -832,10 +832,10 @@ async function executeVmDeployment(vms: VmConfig[], executor: { username: string
             });
 
             broadcastLog(`PROGRESS_END:Updating`);
-            broadcastLog(`✅ ${prefix} Triển khai thành công! VM ID: ${upResult.outputs.vmId?.value || 'N/A'}`);
+            broadcastLog(`✅ ${prefix} Deployed successfully! VM ID: ${upResult.outputs.vmId?.value || 'N/A'}`);
         } catch (err: any) {
             broadcastLog(`PROGRESS_END:Updating`);
-            broadcastLog(`❌ [ERROR] ${prefix} Thất bại: ${err.message}`);
+            broadcastLog(`❌ [ERROR] ${prefix} Failed: ${err.message}`);
         }
     }
 }
@@ -915,17 +915,17 @@ app.post("/api/approvals/:id/:action", async (req, res) => {
             details: `Admin '${authUser.username}' đã PHÊ DUYỆT yêu cầu khởi tạo cho Developer '${request.requestedBy.username}'. Bắt đầu kích hoạt Pulumi Engine.`
         });
 
-        broadcastLog(`\n[APPROVAL] ✅ Yêu cầu '${request.id}' của '${request.requestedBy.username}' đã được Admin '${authUser.username}' phê duyệt! Kích hoạt tiến trình khởi tạo...`);
+        broadcastLog(`\n[APPROVAL] ✅ Request '${request.id}' from '${request.requestedBy.username}' has been approved by Admin '${authUser.username}'! Triggering provisioning...`);
 
         // Kích hoạt Pulumi Runner chạy ngầm
         executeVmDeployment(request.vms, { username: request.requestedBy.username, role: request.requestedBy.role });
 
-        return res.json({ success: true, message: `Đã phê duyệt yêu cầu thành công! Tiến trình Pulumi đang khởi tạo máy ảo ngầm.` });
+        return res.json({ success: true, message: `Approval request approved successfully! Pulumi background provisioning started.` });
     } else if (action === "reject") {
         request.status = "REJECTED";
         request.resolvedAt = new Date().toISOString();
         request.resolvedBy = authUser.username;
-        request.rejectionReason = rejectionReason || "Không được phê duyệt bởi Quản trị viên.";
+        request.rejectionReason = rejectionReason || "Not approved by Administrator.";
 
         recordAuditLog({
             username: authUser.username,
@@ -937,11 +937,11 @@ app.post("/api/approvals/:id/:action", async (req, res) => {
             details: `Admin '${authUser.username}' đã TỪ CHỐI yêu cầu khởi tạo của '${request.requestedBy.username}'. Lý do: ${request.rejectionReason}`
         });
 
-        broadcastLog(`\n[APPROVAL] ❌ Yêu cầu '${request.id}' của '${request.requestedBy.username}' đã bị Admin '${authUser.username}' từ chối. Lý do: ${request.rejectionReason}`);
+        broadcastLog(`\n[APPROVAL] ❌ Request '${request.id}' from '${request.requestedBy.username}' was rejected by Admin '${authUser.username}'. Reason: ${request.rejectionReason}`);
 
-        return res.json({ success: true, message: "Đã từ chối yêu cầu khởi tạo." });
+        return res.json({ success: true, message: "Approval request rejected." });
     } else {
-        return res.status(400).json({ success: false, error: "Hành động không hợp lệ. Chỉ chấp nhận 'approve' hoặc 'reject'." });
+        return res.status(400).json({ success: false, error: "Invalid action. Only 'approve' or 'reject' allowed." });
     }
 });
 
@@ -1057,12 +1057,12 @@ app.post("/api/vms", async (req, res) => {
             details: `Yêu cầu tạo ${vms.length} VM được gửi vào hàng đợi chờ Admin duyệt. Lý do: ${approvalDetails}`
         });
 
-        broadcastLog(`\n[APPROVAL QUEUE] ⏳ Người dùng '${userName}' đã gửi yêu cầu khởi tạo ${vms.length} VM [${vms.map(v => v.name).join(", ")}]. Trạng thái: Chờ Admin phê duyệt.`);
+        broadcastLog(`\n[APPROVAL QUEUE] ⏳ User '${userName}' submitted a request for ${vms.length} VM(s) [${vms.map(v => v.name).join(", ")}]. Status: Pending Admin approval.`);
 
         return res.json({
             success: true,
             requiresApproval: true,
-            message: `⏳ Yêu cầu khởi tạo đã được gửi đến Quản Trị Viên (Admin) để phê duyệt do ${approvalReason === "ENV_RESTRICTION" ? "triển khai trên STAGING/PROD" : "vượt định mức tài nguyên (Quota)"}.`,
+            message: `⏳ Provisioning request has been submitted to Administrator for approval due to ${approvalReason === "ENV_RESTRICTION" ? "deployment on STAGING/PROD" : "exceeding resource quota"}.`,
             data: {
                 requestId: newRequest.id,
                 status: "PENDING",
@@ -1094,8 +1094,8 @@ app.post("/api/vms", async (req, res) => {
     res.json({
         success: true,
         message: isBatch 
-            ? `Đã nhận yêu cầu khởi tạo cụm ${vms.length} máy ảo. Tiến trình đang chạy ngầm...` 
-            : `Đã nhận yêu cầu khởi tạo stack '${stackNames[0]}'. Tiến trình đang chạy ngầm...`,
+            ? `Received provisioning request for cluster of ${vms.length} VMs. Background task running...` 
+            : `Received provisioning request for stack '${stackNames[0]}'. Background task running...`,
         data: {
             stacks: stackNames,
             vms: vms.map(v => v.name),
@@ -1130,7 +1130,7 @@ app.delete("/api/vms/:stackName", async (req, res) => {
         });
     }
 
-    broadcastLog(`\n[DESTROY] [User: ${userName} (${userRole.toUpperCase()})] Bắt đầu xử lý xóa stack '${stackName}'...`);
+    broadcastLog(`\n[DESTROY] [User: ${userName} (${userRole.toUpperCase()})] Initiating deletion for stack '${stackName}'...`);
 
     try {
         const stack = await LocalWorkspace.selectStack({
@@ -1177,7 +1177,7 @@ app.delete("/api/vms/:stackName", async (req, res) => {
         }
 
         if (isProtected && !force) {
-            const warningMsg = `[WARNING] VM '${stackName}' (VM ID: ${vmId || 'N/A'}) đang BẬT chế độ Protection trên Proxmox. Hãy vào Proxmox VE -> VM -> Options -> Tắt Protection hoặc xác nhận Force Destroy!`;
+            const warningMsg = `[WARNING] VM '${stackName}' (VM ID: ${vmId || 'N/A'}) has Protection Mode enabled in Proxmox. Please go to Proxmox VE -> VM -> Options -> Disable Protection or confirm Force Destroy!`;
             broadcastLog(warningMsg);
             return res.status(400).json({
                 success: false,
@@ -1203,22 +1203,22 @@ app.delete("/api/vms/:stackName", async (req, res) => {
         }).then(async () => {
             broadcastLog(`PROGRESS_END:Destroying`);
             await stack.workspace.removeStack(stackName);
-            broadcastLog(`[DESTROYED] Đã xóa hoàn toàn VM và stack '${stackName}'!`);
+            broadcastLog(`[DESTROYED] Successfully deleted VM and stack '${stackName}'!`);
         }).catch((err) => {
             broadcastLog(`PROGRESS_END:Destroying`);
             if (err.message && err.message.includes("protection mode enabled")) {
-                broadcastLog(`[PROTECTED] Proxmox từ chối xóa: VM ${vmId} vẫn đang bật Protection Mode trên Proxmox VE. Hãy vào Proxmox VE -> VM ${vmId} -> Options -> Tắt Protection trước khi xóa.`);
+                broadcastLog(`[PROTECTED] Proxmox VE rejected delete: VM ${vmId} has Protection Mode enabled. Please disable Protection in Proxmox VE before deleting.`);
             } else {
-                broadcastLog(`[ERROR] Lỗi khi hủy VM ${stackName}: ${err.message}`);
+                broadcastLog(`[ERROR] Error destroying VM ${stackName}: ${err.message}`);
             }
         });
 
         res.json({
             success: true,
-            message: `Đang tiến hành hủy máy ảo thuộc stack '${stackName}'...`,
+            message: `Destroying virtual machines for stack '${stackName}'...`,
         });
     } catch (error: any) {
-        broadcastLog(`❌ [ERROR] Không tìm thấy stack ${stackName}: ${error.message}`);
+        broadcastLog(`❌ [ERROR] Stack ${stackName} not found: ${error.message}`);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -1316,10 +1316,10 @@ app.post("/api/nodes/:node/vms/:vmid/power", async (req, res) => {
             details: `Gửi lệnh ${actionLabel} tới VM #${vmid}`
         });
 
-        broadcastLog(`⚡ [POWER] [User: ${userName}] Đã gửi lệnh ${actionLabel} tới VM #${vmid} trên Node '${node}' (Task ID: ${task || 'OK'})`);
+        broadcastLog(`⚡ [POWER] [User: ${userName}] Sent ${actionLabel} command to VM #${vmid} on Node '${node}' (Task ID: ${task || 'OK'})`);
         res.json({ success: true, message: `Lệnh ${actionLabel} đã được gửi thành công.`, data: task });
     } catch (error: any) {
-        broadcastLog(`❌ [POWER ERROR] Lỗi khi thực hiện lệnh nguồn '${action}' cho VM #${vmid}: ${error.message}`);
+        broadcastLog(`❌ [POWER ERROR] Failed executing power action '${action}' for VM #${vmid}: ${error.message}`);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -1359,12 +1359,12 @@ app.post("/api/nodes/:node/vms/:vmid/snapshots", async (req, res) => {
     }
 
     try {
-        broadcastLog(`📸 [SNAPSHOT] [User: ${userName}] Đang tạo snapshot '${snapname}' cho VM #${vmid} trên Node '${node}'...`);
+        broadcastLog(`📸 [SNAPSHOT] [User: ${userName}] Creating snapshot '${snapname}' for VM #${vmid} on Node '${node}'...`);
         const result = await proxmoxClient.createVmSnapshot(node, vmid, snapname, description, !!vmstate);
-        broadcastLog(`✅ [SNAPSHOT] Tạo snapshot '${snapname}' cho VM #${vmid} hoàn tất!`);
+        broadcastLog(`✅ [SNAPSHOT] Created snapshot '${snapname}' for VM #${vmid} successfully!`);
         res.json({ success: true, message: `Đã tạo snapshot '${snapname}' thành công.`, data: result });
     } catch (error: any) {
-        broadcastLog(`❌ [SNAPSHOT ERROR] Lỗi khi tạo snapshot '${snapname}': ${error.message}`);
+        broadcastLog(`❌ [SNAPSHOT ERROR] Failed creating snapshot '${snapname}': ${error.message}`);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -1385,12 +1385,12 @@ app.post("/api/nodes/:node/vms/:vmid/snapshots/:snapname/rollback", async (req, 
     }
 
     try {
-        broadcastLog(`🔄 [SNAPSHOT] Đang khôi phục VM #${vmid} về snapshot '${snapname}'...`);
+        broadcastLog(`🔄 [SNAPSHOT] Restoring VM #${vmid} to snapshot '${snapname}'...`);
         const result = await proxmoxClient.rollbackVmSnapshot(node, vmid, snapname);
-        broadcastLog(`✅ [SNAPSHOT] Đã khôi phục VM #${vmid} về snapshot '${snapname}' thành công!`);
+        broadcastLog(`✅ [SNAPSHOT] Restored VM #${vmid} to snapshot '${snapname}' successfully!`);
         res.json({ success: true, message: `Đã khôi phục về snapshot '${snapname}' thành công.`, data: result });
     } catch (error: any) {
-        broadcastLog(`❌ [SNAPSHOT ERROR] Lỗi khi rollback snapshot '${snapname}': ${error.message}`);
+        broadcastLog(`❌ [SNAPSHOT ERROR] Failed rolling back snapshot '${snapname}': ${error.message}`);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -1411,12 +1411,12 @@ app.delete("/api/nodes/:node/vms/:vmid/snapshots/:snapname", async (req, res) =>
     }
 
     try {
-        broadcastLog(`🗑️ [SNAPSHOT] Đang xóa snapshot '${snapname}' của VM #${vmid}...`);
+        broadcastLog(`🗑️ [SNAPSHOT] Deleting snapshot '${snapname}' of VM #${vmid}...`);
         const result = await proxmoxClient.deleteVmSnapshot(node, vmid, snapname);
-        broadcastLog(`✅ [SNAPSHOT] Đã xóa snapshot '${snapname}' của VM #${vmid} hoàn tất!`);
+        broadcastLog(`✅ [SNAPSHOT] Deleted snapshot '${snapname}' of VM #${vmid} successfully!`);
         res.json({ success: true, message: `Đã xóa snapshot '${snapname}' thành công.`, data: result });
     } catch (error: any) {
-        broadcastLog(`❌ [SNAPSHOT ERROR] Lỗi khi xóa snapshot '${snapname}': ${error.message}`);
+        broadcastLog(`❌ [SNAPSHOT ERROR] Failed deleting snapshot '${snapname}': ${error.message}`);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -1555,7 +1555,7 @@ app.post("/api/nodes/:node/vms/:vmid/firewall/rules", async (req, res) => {
             details: `Thêm Rule Firewall: [${action || 'ACCEPT'} ${type || 'IN'} ${proto || 'TCP'} Port:${dport || 'ANY'}] - ${comment || ''}`,
         });
 
-        broadcastLog(`🛡️ [FIREWALL] [User: ${authUser.username}] Đã thêm Rule Firewall cho VM #${vmid}: ${action || 'ACCEPT'} ${proto || 'TCP'} port ${dport || 'ANY'}`);
+        broadcastLog(`🛡️ [FIREWALL] [User: ${authUser.username}] Added Firewall Rule for VM #${vmid}: ${action || 'ACCEPT'} ${proto || 'TCP'} port ${dport || 'ANY'}`);
         res.json({ success: true, message: "Đã thêm Firewall Rule thành công!", data: result });
     } catch (error: any) {
         res.status(500).json({ success: false, error: error.message });
@@ -1612,7 +1612,7 @@ app.delete("/api/nodes/:node/vms/:vmid/firewall/rules/:pos", async (req, res) =>
             status: "SUCCESS",
             details: `Xóa Firewall Rule #${pos} của VM #${vmid}`,
         });
-        broadcastLog(`🛡️ [FIREWALL] [User: ${authUser.username}] Đã xóa Firewall Rule #${pos} của VM #${vmid}`);
+        broadcastLog(`🛡️ [FIREWALL] [User: ${authUser.username}] Deleted Firewall Rule #${pos} of VM #${vmid}`);
         res.json({ success: true, message: "Đã xóa Firewall Rule thành công!", data: result });
     } catch (error: any) {
         res.status(500).json({ success: false, error: error.message });
@@ -1676,7 +1676,7 @@ app.put("/api/nodes/:node/vms/:vmid/hardware/hotplug", async (req, res) => {
             status: "SUCCESS",
             details: `Thay đổi cấu hình nóng: ${cores ? `${cores} vCPU ` : ''}${memoryMb ? `${memoryMb} MB RAM` : ''}`,
         });
-        broadcastLog(`⚡ [HOTPLUG] [User: ${authUser.username}] Đã điều chỉnh nóng phần cứng VM #${vmid}: ${cores ? `${cores} vCPU, ` : ''}${memoryMb ? `${memoryMb} MB RAM` : ''}`);
+        broadcastLog(`⚡ [HOTPLUG] [User: ${authUser.username}] Hotplugged hardware on VM #${vmid}: ${cores ? `${cores} vCPU, ` : ''}${memoryMb ? `${memoryMb} MB RAM` : ''}`);
         res.json({ success: true, message: "Đã cập nhật cấu hình phần cứng thành công!", data: result });
     } catch (error: any) {
         res.status(500).json({ success: false, error: error.message });
@@ -1710,7 +1710,7 @@ app.post("/api/nodes/:node/vms/:vmid/disks/resize", async (req, res) => {
             status: "SUCCESS",
             details: `Mở rộng đĩa ${diskSlot} thêm ${size}`,
         });
-        broadcastLog(`💾 [DISK RESIZE] [User: ${authUser.username}] Đã mở rộng đĩa ${diskSlot} của VM #${vmid} (Size: ${size})`);
+        broadcastLog(`💾 [DISK RESIZE] [User: ${authUser.username}] Resized disk ${diskSlot} of VM #${vmid} (Size: ${size})`);
         res.json({ success: true, message: `Đã mở rộng đĩa ${diskSlot} thành công!`, data: result });
     } catch (error: any) {
         res.status(500).json({ success: false, error: error.message });
@@ -1750,7 +1750,7 @@ app.post("/api/nodes/:node/vms/:vmid/disks/attach", async (req, res) => {
             status: "SUCCESS",
             details: `Gắn đĩa phụ ${slot || 'scsi1'} (${sizeGb} GB) tại Storage Pool '${storage}'`,
         });
-        broadcastLog(`💾 [MULTI-DISK] [User: ${authUser.username}] Đã gắn thêm đĩa phụ ${slot || 'scsi1'} (${sizeGb} GB trên ${storage}) cho VM #${vmid}`);
+        broadcastLog(`💾 [MULTI-DISK] [User: ${authUser.username}] Attached secondary disk ${slot || 'scsi1'} (${sizeGb} GB on ${storage}) to VM #${vmid}`);
         res.json({ success: true, message: `Đã gắn đĩa phụ ${slot || 'scsi1'} (${sizeGb} GB) thành công!`, data: result });
     } catch (error: any) {
         res.status(500).json({ success: false, error: error.message });
@@ -1783,7 +1783,7 @@ app.delete("/api/nodes/:node/vms/:vmid/disks/:slot", async (req, res) => {
             status: "SUCCESS",
             details: `Gỡ ổ đĩa phụ ${slot} của VM #${vmid}`,
         });
-        broadcastLog(`💾 [MULTI-DISK] [User: ${authUser.username}] Đã gỡ bỏ đĩa phụ ${slot} của VM #${vmid}`);
+        broadcastLog(`💾 [MULTI-DISK] [User: ${authUser.username}] Detached secondary disk ${slot} of VM #${vmid}`);
         res.json({ success: true, message: `Đã gỡ bỏ đĩa ${slot} thành công!`, data: result });
     } catch (error: any) {
         res.status(500).json({ success: false, error: error.message });

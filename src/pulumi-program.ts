@@ -48,10 +48,25 @@ export function createVmProgram(config: VmConfig) {
 
         const isProtected = config.protection ?? false;
         const targetDatastore = config.datastoreId || "local-lvm";
-        const envTag = config.environment ? [config.environment.toLowerCase()] : [];
+
+        // Hàm làm sạch tag theo chuẩn Proxmox VE: chỉ chấp nhận [a-z0-9_][a-z0-9_\-\.]*
+        const cleanTag = (str: any): string => {
+            if (!str) return "";
+            return String(str)
+                .toLowerCase()
+                .trim()
+                .replace(/[^a-z0-9_\-\.]/g, "")
+                .replace(/^[^a-z0-9_]+/, ""); // Bắt buộc bắt đầu bằng chữ cái, số hoặc dấu gạch dưới
+        };
+
+        const envTag = config.environment ? [cleanTag(config.environment)] : [];
         const typeTag = [config.resourceType === "lxc" ? "lxc" : "qemu"];
-        const customTags = (config.tags || []).map(t => t.toLowerCase().trim()).filter(Boolean);
-        const combinedTags = Array.from(new Set([...envTag, ...typeTag, ...customTags]));
+        const rawCustomTags = Array.isArray(config.tags)
+            ? config.tags.flatMap(t => String(t).split(/[,;\s]+/))
+            : String(config.tags || "").split(/[,;\s]+/);
+        const customTags = rawCustomTags.map(cleanTag).filter(t => t.length > 0 && /^[a-z0-9_]/i.test(t));
+        const combinedTags = Array.from(new Set([...envTag, ...typeTag, ...customTags]))
+            .filter(t => t.length > 0 && /^[a-z0-9_]/i.test(t));
 
         // =========================================================
         // CASE 1: LXC CONTAINER CREATION

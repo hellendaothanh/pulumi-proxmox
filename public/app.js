@@ -451,7 +451,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (btnSubmitVm) {
                 btnSubmitVm.disabled = false;
                 btnSubmitVm.title = "";
-                btnSubmitVm.innerHTML = `<span class="spinner hidden"></span><span class="btn-text">Triển Khai VM</span>`;
+                const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
+                btnSubmitVm.innerHTML = `<span class="spinner hidden"></span><span class="btn-text" data-i18n="wizard.submit_btn">${isEn ? 'Deploy VM' : 'Triển Khai VM'}</span>`;
             }
         }
 
@@ -1872,6 +1873,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Render Checkboxes cho Multi-Node Distribution kèm chi tiết Resources và Storage thật
         if (nodesCheckboxContainer) {
+            const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
             nodesCheckboxContainer.innerHTML = clusterData.map((node) => {
                 const primaryNet = node.networks?.find(n => n.address) || node.networks?.[0] || {};
                 const ip = primaryNet.address || "N/A";
@@ -1884,7 +1886,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const storagePills = vmStorages.map(s => {
                     const isZfs = s.storage.includes("zfs");
                     const iconName = isZfs ? "database" : "hard-drive";
-                    return `<span class="storage-pill ${isZfs ? 'storage-pill-zfs' : 'storage-pill-lvm'}"><i data-lucide="${iconName}" class="pill-icon"></i> <strong>${s.storage}</strong>: ${formatBytes(s.avail)} trống</span>`;
+                    return `<span class="storage-pill ${isZfs ? 'storage-pill-zfs' : 'storage-pill-lvm'}"><i data-lucide="${iconName}" class="pill-icon"></i> <strong>${s.storage}</strong>: ${formatBytes(s.avail)} ${isEn ? 'free' : 'trống'}</span>`;
                 }).join(" ");
 
                 const storagesListStr = vmStorages.map(s => s.storage).join(",");
@@ -1901,13 +1903,13 @@ document.addEventListener("DOMContentLoaded", () => {
                                 <small class="node-check-sub">IP: ${ip}</small>
                             </div>
                             <div class="node-metric-line">
-                                <span><i data-lucide="memory-stick" class="pill-icon"></i> RAM Trống: <strong>${formatBytes(freeMem)}</strong> / ${formatBytes(node.maxmem)} (${memPct}%)</span>
+                                <span><i data-lucide="memory-stick" class="pill-icon"></i> ${isEn ? 'Free RAM' : 'RAM Trống'}: <strong>${formatBytes(freeMem)}</strong> / ${formatBytes(node.maxmem)} (${memPct}%)</span>
                             </div>
                             <div class="node-metric-line">
-                                <span><i data-lucide="cpu" class="pill-icon"></i> CPU: <strong>${node.maxcpu || 0} vCPU</strong> (${cpuPct}% đang dùng)</span>
+                                <span><i data-lucide="cpu" class="pill-icon"></i> CPU: <strong>${node.maxcpu || 0} vCPU</strong> (${cpuPct}% ${isEn ? 'in use' : 'đang dùng'})</span>
                             </div>
                             <div class="node-storages-pills-row">
-                                ${storagePills || '<span class="text-muted" style="font-size:10px;">Không có VM Datastore</span>'}
+                                ${storagePills || `<span class="text-muted" style="font-size:10px;">${isEn ? 'No VM Datastores' : 'Không có VM Datastore'}</span>`}
                             </div>
                         </div>
                     </label>
@@ -1997,11 +1999,12 @@ document.addEventListener("DOMContentLoaded", () => {
         
         vmCountVal.textContent = `${count} VM${count > 1 ? 's' : ''}`;
 
+        const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
         if (count === 1) {
             if (singleNodeSection) singleNodeSection.classList.remove("hidden");
             if (multiNodeSection) multiNodeSection.classList.add("hidden");
             if (vmClusterPreview) vmClusterPreview.classList.add("hidden");
-            if (btnText) btnText.textContent = "Triển Khai VM";
+            if (btnText) btnText.textContent = isEn ? "Deploy Virtual Machine" : "Triển Khai VM";
             return;
         }
 
@@ -2009,7 +2012,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (singleNodeSection) singleNodeSection.classList.add("hidden");
         if (multiNodeSection) multiNodeSection.classList.remove("hidden");
         if (vmClusterPreview) vmClusterPreview.classList.remove("hidden");
-        if (btnText) btnText.textContent = `Triển Khai Cụm ${count} Máy Ảo`;
+        if (btnText) btnText.textContent = isEn ? `Deploy Cluster of ${count} VMs` : `Triển Khai Cụm ${count} Máy Ảo`;
 
         // Lấy danh sách Node ĐANG HIỂN THỊ và ĐÃ CHECK
         let selectedNodes = [];
@@ -2096,12 +2099,13 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         // 1. Cập nhật Datastores / Storages (loại bỏ 'local' vì không chứa VM disk)
+        const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
         const validStorages = (selectedNode.storages || []).filter(st => st.active !== 0 && st.storage !== "local");
         if (validStorages.length > 0) {
             datastoreSelect.innerHTML = validStorages.map(st => {
                 const free = formatBytes(st.avail);
                 const total = formatBytes(st.total);
-                return `<option value="${st.storage}">${st.storage} (${st.type || 'storage'} - Trống: ${free} / ${total})</option>`;
+                return `<option value="${st.storage}">${st.storage} (${st.type || 'storage'} - ${isEn ? 'Free' : 'Trống'}: ${free} / ${total})</option>`;
             }).join("");
 
             // Ưu tiên chọn zfs-storage, zfs hoặc local-lvm
@@ -2268,6 +2272,110 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    function formatConsoleLog(text, isEn) {
+        if (!isEn || !text) return text;
+        let str = String(text);
+
+        // 1. Cluster Alert
+        str = str.replace(/\[Cluster Alert\]\s*💾\s*Storage Pool '([^']+)'\s*\(([^)]+)\)\s*vượt ngưỡng\s*\(([^)]+)\)\s*\|\s*Giá trị:\s*([^(|]+)\s*(?:\|\s*)?\(Ngưỡng:\s*([^)]+)\)/i, 
+            "[Cluster Alert] 💾 Storage Pool '$1' ($2) exceeds threshold ($3) | Value: $4 (Threshold: $5)");
+
+        // 2. Destroy logs
+        str = str.replace(/\[DESTROY\]\s*\[User:\s*([^\]]+)\]\s*Bắt đầu (?:xử lý )?xóa stack '([^']+)'\.\.\./i, 
+            "[DESTROY] [User: $1] Initiating deletion for stack '$2'...");
+        str = str.replace(/\[DESTROYED\]\s*Đã xóa hoàn toàn VM và stack '([^']+)'!/i, 
+            "[DESTROYED] Successfully deleted VM and stack '$1'!");
+        str = str.replace(/\[Portal\]\s*Đang tiến hành hủy máy ảo thuộc stack '([^']+)'\.\.\./i, 
+            "[Portal] Destroying virtual machines for stack '$1'...");
+
+        // 3. Create & Provision logs
+        str = str.replace(/\[CLUSTER\]\s*\[User:\s*([^\]]+)\]\s*Bắt đầu khởi tạo cụm\s*(\d+)\s*máy ảo:\s*(.*)\.\.\./i, 
+            "[CLUSTER] [User: $1] Starting provisioning of cluster with $2 VMs: $3...");
+        str = str.replace(/\[CREATE\]\s*\[User:\s*([^\]]+)\]\s*Bắt đầu khởi tạo stack '([^']+)' cho máy ảo\s*(.*)\.\.\./i, 
+            "[CREATE] [User: $1] Initiating provisioning for stack '$2' ($3)...");
+        str = str.replace(/\[Portal\]\s*Đã nhận yêu cầu khởi tạo stack '([^']+)'.\s*Tiến trình đang chạy ngầm\.\.\./i, 
+            "[Portal] Received provisioning request for stack '$1'. Background task running...");
+        str = str.replace(/\[Portal\]\s*Đã nhận yêu cầu khởi tạo cụm\s*(\d+)\s*máy ảo\.\s*Tiến trình đang chạy ngầm\.\.\./i, 
+            "[Portal] Received provisioning request for cluster of $1 VMs. Background task running...");
+        str = str.replace(/\[PULUMI\]\s*(.*)\s*Đang khởi tạo stack '([^']+)' trên Node '([^']+)'\s*\(Storage:\s*([^)]+)\)\.\.\./i, 
+            "[PULUMI] $1 Provisioning stack '$2' on Node '$3' (Storage: $4)...");
+        str = str.replace(/\[PULUMI\]\s*(.*)\s*Bắt đầu (?:xử lý |hủy )?stack '([^']+)'\.\.\./i, 
+            "[PULUMI] $1 Destroying stack '$2'...");
+        str = str.replace(/✅\s*(.*)\s*Triển khai thành công!\s*VM ID:\s*(.*)/i, 
+            "✅ $1 Deployed successfully! VM ID: $2");
+        str = str.replace(/\[SUCCESS\]\s*\[([^\]]+)\]\s*Khởi tạo thành công!/i, 
+            "[SUCCESS] [$1] Provisioned successfully!");
+        str = str.replace(/\[DESTROY\]\s*\[([^\]]+)\]\s*Hủy máy ảo thành công!/i, 
+            "[DESTROY] [$1] Virtual machine destroyed successfully!");
+        str = str.replace(/❌\s*\[ERROR\]\s*(.*)\s*Thất bại:\s*(.*)/i, 
+            "❌ [ERROR] $1 Failed: $2");
+        str = str.replace(/\[ERROR\]\s*Lỗi khi hủy VM\s*([^:]+):\s*(.*)/i, 
+            "[ERROR] Error destroying VM $1: $2");
+        str = str.replace(/❌\s*\[ERROR\]\s*Không tìm thấy stack\s*([^:]+):\s*(.*)/i, 
+            "❌ [ERROR] Stack not found $1: $2");
+
+        // 4. Logins
+        str = str.replace(/🔑\s*\[SSO LOGIN\]\s*Người dùng '([^']+)'\s*\(([^)]+)\)\s*đã đăng nhập qua\s*(.*)\s*\[([^\]]+)\]/i, 
+            "🔑 [SSO LOGIN] User '$1' ($2) signed in via $3 [$4]");
+        str = str.replace(/🔑\s*\[LOCAL LOGIN\]\s*Tài khoản '([^']+)'\s*\(([^)]+)\)\s*đăng nhập thành công\./i, 
+            "🔑 [LOCAL LOGIN] Local account '$1' ($2) successfully signed in.");
+
+        // 5. Approvals & Quota
+        str = str.replace(/\[APPROVAL\]\s*✅\s*Yêu cầu '([^']+)' của '([^']+)' đã được Admin '([^']+)' phê duyệt!\s*Kích hoạt tiến trình khởi tạo\.\.\./i, 
+            "[APPROVAL] ✅ Request '$1' from '$2' has been approved by Admin '$3'! Triggering provisioning...");
+        str = str.replace(/\[APPROVAL\]\s*❌\s*Yêu cầu '([^']+)' của '([^']+)' đã bị Admin '([^']+)' từ chối\.\s*Lý do:\s*(.*)/i, 
+            "[APPROVAL] ❌ Request '$1' from '$2' was rejected by Admin '$3'. Reason: $4");
+        str = str.replace(/\[APPROVAL QUEUE\]\s*⏳\s*Người dùng '([^']+)' đã gửi yêu cầu khởi tạo\s*(\d+)\s*VM\s*\[([^\]]+)\]\.\s*Trạng thái:\s*Chờ Admin phê duyệt\./i, 
+            "[APPROVAL QUEUE] ⏳ User '$1' submitted a request for $2 VM(s) [$3]. Status: Pending Admin approval.");
+
+        // 6. Power & Snapshots
+        str = str.replace(/⚡\s*\[POWER\]\s*\[User:\s*([^\]]+)\]\s*Đã gửi lệnh\s*(.*)\s*tới VM #(\d+)\s*trên Node '([^']+)'\s*\(Task ID:\s*([^)]+)\)/i, 
+            "⚡ [POWER] [User: $1] Sent $2 command to VM #$3 on Node '$4' (Task ID: $5)");
+        str = str.replace(/❌\s*\[POWER ERROR\]\s*Lỗi khi thực hiện lệnh nguồn '([^']+)' cho VM #(\d+):\s*(.*)/i, 
+            "❌ [POWER ERROR] Failed power action '$1' on VM #$2: $3");
+        str = str.replace(/📸\s*\[SNAPSHOT\]\s*\[User:\s*([^\]]+)\]\s*Đang tạo snapshot '([^']+)' cho VM #(\d+)\s*trên Node '([^']+)'\.\.\./i, 
+            "📸 [SNAPSHOT] [User: $1] Creating snapshot '$2' for VM #$3 on Node '$4'...");
+        str = str.replace(/✅\s*\[SNAPSHOT\]\s*Tạo snapshot '([^']+)' cho VM #(\d+)\s*hoàn tất!/i, 
+            "✅ [SNAPSHOT] Created snapshot '$1' for VM #$2 successfully!");
+        str = str.replace(/❌\s*\[SNAPSHOT ERROR\]\s*Lỗi khi tạo snapshot '([^']+)':\s*(.*)/i, 
+            "❌ [SNAPSHOT ERROR] Error creating snapshot '$1': $2");
+        str = str.replace(/🔄\s*\[SNAPSHOT\]\s*Đang khôi phục VM #(\d+)\s*về snapshot '([^']+)'\.\.\./i, 
+            "🔄 [SNAPSHOT] Restoring VM #$1 to snapshot '$2'...");
+        str = str.replace(/✅\s*\[SNAPSHOT\]\s*Đã khôi phục VM #(\d+)\s*về snapshot '([^']+)' thành công!/i, 
+            "✅ [SNAPSHOT] Restored VM #$1 to snapshot '$2' successfully!");
+        str = str.replace(/❌\s*\[SNAPSHOT ERROR\]\s*Lỗi khi rollback snapshot '([^']+)':\s*(.*)/i, 
+            "❌ [SNAPSHOT ERROR] Error rolling back snapshot '$1': $2");
+        str = str.replace(/🗑️\s*\[SNAPSHOT\]\s*Đang xóa snapshot '([^']+)' của VM #(\d+)\.\.\./i, 
+            "🗑️ [SNAPSHOT] Deleting snapshot '$1' of VM #$2...");
+        str = str.replace(/✅\s*\[SNAPSHOT\]\s*Đã xóa snapshot '([^']+)' của VM #(\d+)\s*hoàn tất!/i, 
+            "✅ [SNAPSHOT] Deleted snapshot '$1' of VM #$2 successfully!");
+        str = str.replace(/❌\s*\[SNAPSHOT ERROR\]\s*Lỗi khi xóa snapshot '([^']+)':\s*(.*)/i, 
+            "❌ [SNAPSHOT ERROR] Error deleting snapshot '$1': $2");
+
+        // 7. Firewall & Hotplug
+        str = str.replace(/🛡️\s*\[FIREWALL\]\s*\[User:\s*([^\]]+)\]\s*Đã thêm Rule Firewall cho VM #(\d+):\s*(.*)/i, 
+            "🛡️ [FIREWALL] [User: $1] Added Firewall Rule for VM #$2: $3");
+        str = str.replace(/🛡️\s*\[FIREWALL\]\s*\[User:\s*([^\]]+)\]\s*Đã xóa Firewall Rule #(\d+)\s*của VM #(\d+)/i, 
+            "🛡️ [FIREWALL] [User: $1] Deleted Firewall Rule #$2 of VM #$3");
+        str = str.replace(/⚡\s*\[HOTPLUG\]\s*\[User:\s*([^\]]+)\]\s*Đã điều chỉnh nóng phần cứng VM #(\d+):\s*(.*)/i, 
+            "⚡ [HOTPLUG] [User: $1] Live hotplugged hardware on VM #$2: $3");
+        str = str.replace(/💾\s*\[DISK RESIZE\]\s*\[User:\s*([^\]]+)\]\s*Đã mở rộng đĩa\s*(\w+)\s*của VM #(\d+)\s*\(Size:\s*([^)]+)\)/i, 
+            "💾 [DISK RESIZE] [User: $1] Resized disk $2 of VM #$3 (Size: $4)");
+        str = str.replace(/💾\s*\[MULTI-DISK\]\s*\[User:\s*([^\]]+)\]\s*Đã gắn thêm đĩa phụ\s*(\w+)\s*\(([^)]+)\)\s*cho VM #(\d+)/i, 
+            "💾 [MULTI-DISK] [User: $1] Attached secondary disk $2 ($3) to VM #$4");
+        str = str.replace(/💾\s*\[MULTI-DISK\]\s*\[User:\s*([^\]]+)\]\s*Đã gỡ bỏ đĩa phụ\s*(\w+)\s*của VM #(\d+)/i, 
+            "💾 [MULTI-DISK] [User: $1] Detached secondary disk $2 of VM #$3");
+
+        // 8. Progress and System
+        str = str.replace(/\[System\]\s*Đang kết nối tới máy chủ\.\.\./i, 
+            "[System] Connecting to server...");
+        str = str.replace(/\[System\]\s*Mất kết nối tới log stream,\s*đang thử lại sau 3s\.\.\./i, 
+            "[System] Connection lost to log stream, reconnecting in 3s...");
+        str = str.replace(/hoàn tất/gi, "completed");
+
+        return str;
+    }
+
     const terminal = document.getElementById("terminal");
     const btnClearLogs = document.getElementById("btnClearLogs");
     const btnCopyLogs = document.getElementById("btnCopyLogs");
@@ -2310,12 +2418,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function appendLog(rawText) {
-        if (typeof rawText !== "string") return;
+        if (!terminal) return;
+        const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
 
-        // 1. Nhận diện các sự kiện tiến trình từ server
+        // 1. Nhận diện các sự kiện tiến trình đặc biệt
         if (rawText.startsWith("PROGRESS_START:")) {
-            const action = rawText.split(":")[1] || "Updating";
-            currentProgressAction = action;
+            const parts = rawText.split(":");
+            const action = parts[1] || "Updating";
+            currentProgressAction = action.charAt(0).toUpperCase() + action.slice(1).toLowerCase();
+            if (currentProgressAction === "Deleting") currentProgressAction = "Destroying";
+            
             if (progressInterval) clearInterval(progressInterval);
             progressStartTime = Date.now();
 
@@ -2326,12 +2438,13 @@ document.addEventListener("DOMContentLoaded", () => {
             } else {
                 activeProgressLine.className = "terminal-line progress-updating";
             }
-            activeProgressLine.textContent = `[RUNNING] @ ${action}... [0s]`;
+
+            activeProgressLine.textContent = `⏳ @ ${currentProgressAction}... [0s]`;
 
             progressInterval = setInterval(() => {
                 if (activeProgressLine && progressStartTime) {
                     const sec = Math.floor((Date.now() - progressStartTime) / 1000);
-                    activeProgressLine.textContent = `[RUNNING] @ ${currentProgressAction}... [${sec}s]`;
+                    activeProgressLine.textContent = `⏳ @ ${currentProgressAction}... [${sec}s]`;
                     terminal.scrollTop = terminal.scrollHeight;
                 }
             }, 1000);
@@ -2345,7 +2458,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const action = parts[1] || currentProgressAction;
             const sec = parts[2] || (progressStartTime ? Math.floor((Date.now() - progressStartTime) / 1000) : "0");
             if (activeProgressLine) {
-                activeProgressLine.textContent = `[RUNNING] @ ${action}... [${sec}s]`;
+                activeProgressLine.textContent = `⏳ @ ${action}... [${sec}s]`;
                 terminal.scrollTop = terminal.scrollHeight;
             }
             return;
@@ -2358,7 +2471,7 @@ document.addEventListener("DOMContentLoaded", () => {
             progressInterval = null;
             if (activeProgressLine) {
                 const finalSec = progressStartTime ? Math.floor((Date.now() - progressStartTime) / 1000) : 0;
-                activeProgressLine.textContent = `[DONE] @ ${action} hoàn tất [${finalSec}s]`;
+                activeProgressLine.textContent = isEn ? `[DONE] @ ${action} completed [${finalSec}s]` : `[DONE] @ ${action} hoàn tất [${finalSec}s]`;
                 activeProgressLine.classList.remove("progress-updating");
                 activeProgressLine.classList.add("text-info");
             }
@@ -2427,7 +2540,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 progressInterval = null;
                 if (progressStartTime) {
                     const finalSec = Math.floor((Date.now() - progressStartTime) / 1000);
-                    activeProgressLine.textContent = `⏳ @ ${currentProgressAction} hoàn tất [${finalSec}s]`;
+                    activeProgressLine.textContent = isEn ? `⏳ @ ${currentProgressAction} completed [${finalSec}s]` : `⏳ @ ${currentProgressAction} hoàn tất [${finalSec}s]`;
                     activeProgressLine.classList.remove("progress-updating");
                     activeProgressLine.classList.add("text-info");
                 }
@@ -3154,7 +3267,8 @@ runcmd:
             appendLog(`[Portal Error] ${err.message}`);
         } finally {
             btnSubmit.disabled = false;
-            btnText.textContent = "Triển Khai VM";
+            const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
+            btnText.textContent = isEn ? "Deploy Virtual Machine" : "Triển Khai VM";
             spinner.classList.add("hidden");
         }
     });
@@ -3211,22 +3325,33 @@ runcmd:
 
     function formatAlertTitle(rawTitle, isEn) {
         if (!rawTitle) return "";
-        if (!isEn) return rawTitle;
         let text = String(rawTitle);
-        text = text.replace(/\[VƯỢT NGƯỠNG\]\s*/i, "[THRESHOLD EXCEEDED] ");
-        text = text.replace(/Storage Pool '([^']+)' \(([^)]+)\) vượt ngưỡng \(([^)]+)\)/i, "Storage Pool '$1' ($2) exceeds threshold ($3)");
-        text = text.replace(/Node '([^']+)' cạn kiệt RAM \(([^)]+)\)/i, "Node '$1' running out of RAM ($2)");
-        text = text.replace(/Node '([^']+)' quá tải CPU \(([^)]+)\)/i, "Node '$1' CPU overloaded ($2)");
+        if (isEn) {
+            text = text.replace(/\[VƯỢT NGƯỠNG\]\s*/i, "[THRESHOLD EXCEEDED] ");
+            text = text.replace(/💾\s*Storage Pool '([^']+)'\s*\(([^)]+)\)\s*vượt ngưỡng\s*\(([^)]+)\)/i, "💾 Storage Pool '$1' ($2) exceeds threshold ($3)");
+            text = text.replace(/🚨\s*Node '([^']+)'\s*cạn kiệt RAM\s*\(([^)]+)\)/i, "🚨 Node '$1' RAM capacity critical ($2)");
+            text = text.replace(/⚠️\s*Node '([^']+)'\s*quá tải CPU\s*\(([^)]+)\)/i, "⚠️ Node '$1' CPU overload ($2)");
+        } else {
+            text = text.replace(/\[THRESHOLD EXCEEDED\]\s*/i, "[VƯỢT NGƯỠNG] ");
+            text = text.replace(/💾\s*Storage Pool '([^']+)'\s*\(([^)]+)\)\s*exceeds threshold\s*\(([^)]+)\)/i, "💾 Storage Pool '$1' ($2) vượt ngưỡng ($3)");
+            text = text.replace(/🚨\s*Node '([^']+)'\s*RAM capacity critical\s*\(([^)]+)\)/i, "🚨 Node '$1' cạn kiệt RAM ($2)");
+            text = text.replace(/⚠️\s*Node '([^']+)'\s*CPU overload\s*\(([^)]+)\)/i, "⚠️ Node '$1' quá tải CPU ($2)");
+        }
         return text;
     }
 
     function formatAlertMessage(rawMsg, isEn) {
         if (!rawMsg) return "";
-        if (!isEn) return rawMsg;
         let text = String(rawMsg);
-        text = text.replace(/Ổ đĩa\/Pool lưu trữ '([^']+)' trên node '([^']+)' đã đầy ([^,]+), vượt ngưỡng cho phép ([^.]+)\. Khuyến nghị dọn dẹp Snapshot cũ hoặc mở rộng LUN\/ZFS!/i, "Storage Pool '$1' on node '$2' is at $3 usage, exceeding safe threshold of $4. Recommended to clean up old snapshots or expand storage pool capacity!");
-        text = text.replace(/Dung lượng RAM trên node '([^']+)' đã sử dụng ([^,]+), vượt ngưỡng ([^.]+)\. Nguy cơ Out-Of-Memory \(OOM Killer\)!/i, "Memory usage on node '$1' reached $2, exceeding threshold of $3. Risk of Out-Of-Memory (OOM Killer)!");
-        text = text.replace(/Mức tải CPU trên node '([^']+)' đạt ([^,]+), vượt ngưỡng ([^.]+)\./i, "CPU load on node '$1' reached $2, exceeding threshold of $3.");
+        if (isEn) {
+            text = text.replace(/Ổ đĩa\/Pool lưu trữ '([^']+)' trên node '([^']+)' đã đầy ([^,]+), vượt ngưỡng cho phép ([^.]+)\. Khuyến nghị dọn dẹp Snapshot cũ hoặc mở rộng LUN\/ZFS!/i, "Storage pool '$1' on node '$2' is at $3, exceeding threshold of $4. Recommended to clean up old snapshots or expand LUN/ZFS storage!");
+            text = text.replace(/Dung lượng RAM trên node '([^']+)' đã sử dụng ([^,]+), vượt ngưỡng ([^.]+)\. Nguy cơ Out-Of-Memory \(OOM Killer\)!/i, "RAM capacity on node '$1' is at $2, exceeding threshold $3. Risk of Out-Of-Memory (OOM Killer)!");
+            text = text.replace(/CPU trên node '([^']+)' đã chạm mức ([^,]+), vượt ngưỡng an toàn ([^.]+)\. Cần kiểm tra lại các workload hoặc scale horizontal!/i, "CPU on node '$1' reached $2, exceeding threshold $3. Please check workloads or scale horizontally!");
+        } else {
+            text = text.replace(/Storage pool '([^']+)' on node '([^']+)' is at ([^,]+), exceeding threshold of ([^.]+)\. Recommended to clean up old snapshots or expand LUN\/ZFS storage!/i, "Ổ đĩa/Pool lưu trữ '$1' trên node '$2' đã đầy $3, vượt ngưỡng cho phép $4. Khuyến nghị dọn dẹp Snapshot cũ hoặc mở rộng LUN/ZFS!");
+            text = text.replace(/RAM capacity on node '([^']+)' is at ([^,]+), exceeding threshold ([^.]+)\. Risk of Out-Of-Memory \(OOM Killer\)!/i, "Dung lượng RAM trên node '$1' đã sử dụng $2, vượt ngưỡng $3. Nguy cơ Out-Of-Memory (OOM Killer)!");
+            text = text.replace(/CPU on node '([^']+)' reached ([^,]+), exceeding threshold ([^.]+)\. Please check workloads or scale horizontally!/i, "CPU trên node '$1' đã chạm mức $2, vượt ngưỡng an toàn $3. Cần kiểm tra lại các workload hoặc scale horizontal!");
+        }
         return text;
     }
 

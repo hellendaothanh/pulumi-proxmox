@@ -193,8 +193,8 @@ class AlertService {
                         id: alertKey,
                         type: "CPU_HIGH",
                         severity: cpuUsage >= 95 ? "CRITICAL" : "WARNING",
-                        title: `⚠️ Node '${nodeName}' quá tải CPU (${cpuUsage}%)`,
-                        message: `CPU trên node '${nodeName}' đã chạm mức ${cpuUsage}%, vượt ngưỡng an toàn ${this.thresholds.cpuPercent}%. Cần kiểm tra lại các workload hoặc scale horizontal!`,
+                        title: `⚠️ Node '${nodeName}' CPU overload (${cpuUsage}%)`,
+                        message: `CPU on node '${nodeName}' reached ${cpuUsage}%, exceeding threshold ${this.thresholds.cpuPercent}%. Please check workloads or scale horizontally!`,
                         node: nodeName,
                         resourceName: `CPU ${nodeName}`,
                         currentValue: cpuUsage,
@@ -214,8 +214,8 @@ class AlertService {
                             id: alertKey,
                             type: "RAM_HIGH",
                             severity: ramUsage >= 95 ? "CRITICAL" : "WARNING",
-                            title: `🚨 Node '${nodeName}' cạn kiệt RAM (${ramUsage}%)`,
-                            message: `Dung lượng RAM trên node '${nodeName}' đã sử dụng ${ramUsage}%, vượt ngưỡng ${this.thresholds.ramPercent}%. Nguy cơ Out-Of-Memory (OOM Killer)!`,
+                            title: `🚨 Node '${nodeName}' RAM capacity critical (${ramUsage}%)`,
+                            message: `RAM capacity on node '${nodeName}' is at ${ramUsage}%, exceeding threshold ${this.thresholds.ramPercent}%. Risk of Out-Of-Memory (OOM Killer)!`,
                             node: nodeName,
                             resourceName: `RAM ${nodeName}`,
                             currentValue: ramUsage,
@@ -238,8 +238,8 @@ class AlertService {
                                     id: alertKey,
                                     type: "STORAGE_HIGH",
                                     severity: storageUsage >= 95 ? "CRITICAL" : "WARNING",
-                                    title: `💾 Storage Pool '${st.storage}' (${nodeName}) vượt ngưỡng (${storageUsage}%)`,
-                                    message: `Ổ đĩa/Pool lưu trữ '${st.storage}' trên node '${nodeName}' đã đầy ${storageUsage}%, vượt ngưỡng cho phép ${this.thresholds.storagePercent}%. Khuyến nghị dọn dẹp Snapshot cũ hoặc mở rộng LUN/ZFS!`,
+                                    title: `💾 Storage Pool '${st.storage}' (${nodeName}) exceeds threshold (${storageUsage}%)`,
+                                    message: `Storage pool '${st.storage}' on node '${nodeName}' is at ${storageUsage}%, exceeding threshold of ${this.thresholds.storagePercent}%. Recommended to clean up old snapshots or expand LUN/ZFS storage!`,
                                     node: nodeName,
                                     resourceName: `${st.storage} (${st.type})`,
                                     currentValue: storageUsage,
@@ -350,8 +350,8 @@ class AlertService {
     }
 
     public async dispatchNotification(alert: ClusterAlert, isResolved: boolean = false) {
-        const title = isResolved ? `✅ [ĐÃ PHỤC HỒI] ${alert.title.replace(/^[⚠️🚨💾\s]+/, "")}` : alert.title;
-        const logMsg = `[Cluster Alert] ${title} | Giá trị: ${alert.currentValue}${alert.unit} (Ngưỡng: ${alert.thresholdValue}${alert.unit})`;
+        const title = isResolved ? `✅ [RESOLVED] ${alert.title.replace(/^[⚠️🚨💾\s]+/, "")}` : alert.title;
+        const logMsg = `[Cluster Alert] ${title} | Value: ${alert.currentValue}${alert.unit} (Threshold: ${alert.thresholdValue}${alert.unit})`;
 
         if (this.logBroadcastCallback) {
             this.logBroadcastCallback(logMsg);

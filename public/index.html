@@ -606,9 +606,9 @@
                             </div>
                         </details>
 
-                        <button type="submit" id="btnSubmit" class="btn-primary" style="margin-top: 18px;" data-i18n="wizard.submit_btn">
+                        <button type="submit" id="btnSubmit" class="btn-primary" style="margin-top: 18px;">
                             <span class="spinner hidden"></span>
-                            <span class="btn-text">Triển Khai VM</span>
+                            <span class="btn-text" data-i18n="wizard.submit_btn">Triển Khai VM</span>
                         </button>
                     </form>
                 </section>
@@ -1296,7 +1296,7 @@
                             </label>
                             <div class="input-unit-group" style="max-width: 260px;">
                                 <input type="number" id="cfgCheckInterval" min="10" max="600" value="30" required class="form-input">
-                                <span class="input-unit">Giây</span>
+                                <span class="input-unit" data-i18n="alert.unit_seconds">Giây</span>
                             </div>
                         </div>
 
@@ -1310,7 +1310,7 @@
                             <div class="channel-header">
                                 <div style="display:flex; align-items:center; gap:8px;">
                                     <i data-lucide="message-square" style="color:#38bdf8; width:18px;height:18px;"></i>
-                                    <strong>Telegram Bot Notification</strong>
+                                    <strong data-i18n="alert.tg_title">Telegram Bot Notification</strong>
                                 </div>
                                 <label class="toggle-switch-label">
                                     <input type="checkbox" id="cfgTelegramEnabled">
@@ -1319,12 +1319,12 @@
                             </div>
                             <div class="config-grid-2" style="margin-top: 10px;">
                                 <div class="form-group">
-                                    <label for="cfgTelegramBotToken">Telegram Bot Token</label>
-                                    <input type="password" id="cfgTelegramBotToken" class="form-input" placeholder="vd: 123456789:ABCdefGhIJKlmNoPQ...">
+                                    <label for="cfgTelegramBotToken" data-i18n="alert.lbl_tg_token">Telegram Bot Token</label>
+                                    <input type="password" id="cfgTelegramBotToken" class="form-input" data-i18n-placeholder="alert.tg_token_placeholder" placeholder="vd: 123456789:ABCdefGhIJKlmNoPQ...">
                                 </div>
                                 <div class="form-group">
-                                    <label for="cfgTelegramChatId">Telegram Chat ID / Group ID</label>
-                                    <input type="text" id="cfgTelegramChatId" class="form-input" placeholder="vd: -100123456789 hoặc 987654321">
+                                    <label for="cfgTelegramChatId" data-i18n="alert.lbl_tg_chat">Telegram Chat ID / Group ID</label>
+                                    <input type="text" id="cfgTelegramChatId" class="form-input" data-i18n-placeholder="alert.tg_chat_placeholder" placeholder="vd: -100123456789 hoặc 987654321">
                                 </div>
                             </div>
                         </div>
@@ -1334,7 +1334,7 @@
                             <div class="channel-header">
                                 <div style="display:flex; align-items:center; gap:8px;">
                                     <i data-lucide="webhook" style="color:#a855f7; width:18px;height:18px;"></i>
-                                    <strong>Generic Webhook (Discord / Slack / Teams)</strong>
+                                    <strong data-i18n="alert.webhook_title">Generic Webhook (Discord / Slack / Teams)</strong>
                                 </div>
                                 <label class="toggle-switch-label">
                                     <input type="checkbox" id="cfgWebhookEnabled">
@@ -1342,8 +1342,8 @@
                                 </label>
                             </div>
                             <div class="form-group" style="margin-top: 10px;">
-                                <label for="cfgWebhookUrl">Webhook URL (Hỗ trợ Discord / Slack / API Gateway)</label>
-                                <input type="url" id="cfgWebhookUrl" class="form-input" placeholder="https://discord.com/api/webhooks/... hoặc https://hooks.slack.com/services/...">
+                                <label for="cfgWebhookUrl" data-i18n="alert.lbl_webhook">Webhook URL (Hỗ trợ Discord / Slack / API Gateway)</label>
+                                <input type="url" id="cfgWebhookUrl" class="form-input" data-i18n-placeholder="alert.webhook_placeholder" placeholder="https://discord.com/api/webhooks/... hoặc https://hooks.slack.com/services/...">
                             </div>
                         </div>
 
@@ -1542,7 +1542,7 @@
         <i data-lucide="chevron-up" class="btn-icon"></i>
     </button>
 
-    <script src="i18n.js?v=20260820-13"></script>
-    <script src="app.js?v=20260820-13"></script>
+    <script src="i18n.js?v=20260820-20"></script>
+    <script src="app.js?v=20260820-20"></script>
 </body>
 </html>
