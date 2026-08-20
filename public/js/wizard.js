@@ -587,7 +587,9 @@ window.updateNodeSpecificFields = function() {
         }
     }
 
-    if (allImages.length > 0 && imageSelect) {
+    if (typeof window.renderOsSelector === "function") {
+        window.renderOsSelector(allImages, selectedNode);
+    } else if (allImages.length > 0 && imageSelect) {
         imageSelect.innerHTML = allImages.map(img => {
             const sizeStr = img.size ? ` - ${window.formatBytes(img.size)}` : "";
             return `<option value="${img.volid}">💿 ${img.name} (${img.storage}${sizeStr})</option>`;
@@ -598,6 +600,273 @@ window.updateNodeSpecificFields = function() {
             <option value="local:iso/ubuntu-22.04-cloud.img">local:iso/ubuntu-22.04-cloud.img (Ubuntu 22.04)</option>
             <option value="local:iso/debian-12-cloud.img">local:iso/debian-12-cloud.img (Debian 12)</option>
         `;
+    }
+};
+
+window.osFamilyPresets = {
+    ubuntu: {
+        id: "ubuntu",
+        name: "Ubuntu Linux",
+        keywords: ["ubuntu"],
+        defaultPath: "local:iso/ubuntu-22.04-cloud.img",
+        badgeId: "ubuntuVersionBadge",
+        desc: "Ubuntu Server LTS Cloud-Init",
+    },
+    debian: {
+        id: "debian",
+        name: "Debian GNU/Linux",
+        keywords: ["debian"],
+        defaultPath: "local:iso/debian-12-cloud.img",
+        badgeId: "debianVersionBadge",
+        desc: "Debian 12 Bookworm / 11 Bullseye Cloud-Init",
+    },
+    rocky: {
+        id: "rocky",
+        name: "Rocky / Enterprise Linux",
+        keywords: ["rocky", "almalinux", "centos", "rhel", "fedora"],
+        defaultPath: "local:iso/rocky-9-cloud.img",
+        badgeId: "rockyVersionBadge",
+        desc: "Rocky Linux 9 / AlmaLinux 9 RHEL Compatible",
+    },
+    alpine: {
+        id: "alpine",
+        name: "Alpine Linux",
+        keywords: ["alpine"],
+        defaultPath: "local:iso/alpine-3.20-cloud.img",
+        badgeId: "alpineVersionBadge",
+        desc: "Alpine Linux 3.20 / 3.19 Lightweight",
+    },
+    windows: {
+        id: "windows",
+        name: "Windows Server / Desktop",
+        keywords: ["win", "windows", "virtio"],
+        defaultPath: "local:iso/Windows_Server_2022.iso",
+        badgeId: "windowsVersionBadge",
+        desc: "Windows Server 2022 / 2019 / Win 11 ISO",
+    },
+    custom: {
+        id: "custom",
+        name: "Custom ISO / File",
+        keywords: [],
+        defaultPath: "",
+        badgeId: null,
+        desc: "File ISO / Img Tùy Chỉnh từ Storage",
+    }
+};
+
+window.cachedAvailableImages = [];
+window.activeOsFamily = "ubuntu";
+window.activeOsCategory = "all";
+
+window.renderOsSelector = function(allImages, selectedNode) {
+    window.cachedAvailableImages = allImages || [];
+    const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
+
+    // 1. Populate raw select
+    const imageSelect = document.getElementById("diskImageId");
+    if (imageSelect) {
+        if (allImages.length > 0) {
+            imageSelect.innerHTML = allImages.map(img => {
+                const sizeStr = img.size ? ` - ${window.formatBytes(img.size)}` : "";
+                return `<option value="${img.volid}">💿 ${img.name} (${img.storage}${sizeStr})</option>`;
+            }).join("");
+        } else {
+            imageSelect.innerHTML = `
+                <option value="local:iso/rocky-9-cloud.img">local:iso/rocky-9-cloud.img (Rocky Linux 9 Cloud)</option>
+                <option value="local:iso/ubuntu-22.04-cloud.img">local:iso/ubuntu-22.04-cloud.img (Ubuntu 22.04)</option>
+                <option value="local:iso/debian-12-cloud.img">local:iso/debian-12-cloud.img (Debian 12)</option>
+            `;
+        }
+    }
+
+    // 2. Scan available versions for each family badge
+    Object.keys(window.osFamilyPresets).forEach(famKey => {
+        const fam = window.osFamilyPresets[famKey];
+        if (!fam.badgeId) return;
+        const badgeEl = document.getElementById(fam.badgeId);
+        if (!badgeEl) return;
+
+        const matches = allImages.filter(img => {
+            const low = (img.volid || "").toLowerCase();
+            return fam.keywords.some(kw => low.includes(kw));
+        });
+
+        if (matches.length > 0) {
+            const names = matches.map(m => m.name.replace(/\.(img|iso|qcow2|raw)$/i, '')).join(", ");
+            badgeEl.textContent = `✓ ${matches.length} ${isEn ? 'found' : 'bản'}: ${names.length > 25 ? names.substring(0, 25) + '...' : names}`;
+            badgeEl.style.color = "#38bdf8";
+        } else {
+            if (famKey === "ubuntu") badgeEl.textContent = "24.04 / 22.04 LTS";
+            else if (famKey === "debian") badgeEl.textContent = "Debian 12 Bookworm";
+            else if (famKey === "rocky") badgeEl.textContent = "Rocky 9 / Alma 9";
+            else if (famKey === "alpine") badgeEl.textContent = "Alpine 3.20 / 3.19";
+            else if (famKey === "windows") badgeEl.textContent = "Server 2022 / 2019";
+            badgeEl.style.color = "#64748b";
+        }
+    });
+
+    // 3. Update current active family
+    window.selectOsFamily(window.activeOsFamily || "ubuntu");
+};
+
+window.selectOsFamily = function(familyKey) {
+    window.activeOsFamily = familyKey;
+    const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
+    const fam = window.osFamilyPresets[familyKey] || window.osFamilyPresets.ubuntu;
+    const allImages = window.cachedAvailableImages || [];
+
+    // Highlight card
+    document.querySelectorAll(".os-card").forEach(card => {
+        if (card.getAttribute("data-os-family") === familyKey) {
+            card.classList.add("active");
+        } else {
+            card.classList.remove("active");
+        }
+    });
+
+    const matchedTitle = document.getElementById("osMatchedTitle");
+    const matchedBadge = document.getElementById("osMatchedBadge");
+    const matchedDesc = document.getElementById("osMatchedDesc");
+    const versionWrapper = document.getElementById("osVersionSelectorWrapper");
+    const subSelect = document.getElementById("osFamilySubSelect");
+    const imageSelect = document.getElementById("diskImageId");
+    const rawDropdownSection = document.getElementById("rawImageDropdownSection");
+
+    if (familyKey === "custom") {
+        if (rawDropdownSection) rawDropdownSection.style.display = "block";
+        if (matchedTitle) matchedTitle.textContent = isEn ? "Manual / Storage File Selection" : "Chọn File ISO / Img Tùy Chỉnh";
+        if (matchedBadge && imageSelect) matchedBadge.textContent = imageSelect.value || "Custom";
+        if (matchedDesc) matchedDesc.textContent = isEn ? "Choose any raw image file directly from the storage dropdown below." : "Chọn trực tiếp file bất kỳ từ danh sách Storage bên dưới.";
+        if (versionWrapper) versionWrapper.style.display = "none";
+        return;
+    }
+
+    // Find matches in cluster
+    const matches = allImages.filter(img => {
+        const low = (img.volid || "").toLowerCase();
+        return fam.keywords.some(kw => low.includes(kw));
+    });
+
+    if (matches.length > 0) {
+        // We have matching image(s) on the node!
+        let chosen = matches[0];
+        if (imageSelect && matches.some(m => m.volid === imageSelect.value)) {
+            chosen = matches.find(m => m.volid === imageSelect.value);
+        }
+
+        if (imageSelect) imageSelect.value = chosen.volid;
+        if (matchedTitle) matchedTitle.textContent = fam.name;
+        if (matchedBadge) matchedBadge.textContent = chosen.volid;
+        if (matchedDesc) matchedDesc.textContent = isEn 
+            ? `✓ Auto-detected image on storage (${chosen.storage} - ${window.formatBytes(chosen.size)})` 
+            : `✓ Tự động phát hiện image trên storage (${chosen.storage} - ${window.formatBytes(chosen.size)})`;
+
+        if (matches.length > 1 && subSelect && versionWrapper) {
+            subSelect.innerHTML = matches.map(m => `
+                <option value="${m.volid}" ${m.volid === chosen.volid ? 'selected' : ''}>${m.name} (${m.storage})</option>
+            `).join("");
+            versionWrapper.style.display = "block";
+            subSelect.onchange = function() {
+                if (imageSelect) imageSelect.value = subSelect.value;
+                if (matchedBadge) matchedBadge.textContent = subSelect.value;
+            };
+        } else if (versionWrapper) {
+            versionWrapper.style.display = "none";
+        }
+    } else {
+        // No match found on storage
+        const defaultPath = fam.defaultPath;
+        if (imageSelect) {
+            if (!Array.from(imageSelect.options).some(o => o.value === defaultPath)) {
+                const opt = document.createElement("option");
+                opt.value = defaultPath;
+                opt.textContent = `${defaultPath} (${fam.name})`;
+                imageSelect.appendChild(opt);
+            }
+            imageSelect.value = defaultPath;
+        }
+        if (matchedTitle) matchedTitle.textContent = fam.name;
+        if (matchedBadge) matchedBadge.textContent = defaultPath;
+        if (matchedDesc) matchedDesc.textContent = isEn 
+            ? `Standard template path. If image is not present on Proxmox, please upload ${fam.name} to storage.` 
+            : `Đường dẫn chuẩn template. Nếu chưa có trên Proxmox, hãy tải file cài đặt ${fam.name} vào storage.`;
+        if (versionWrapper) versionWrapper.style.display = "none";
+    }
+};
+
+window.initOsSelector = function() {
+    // 1. Filter pill tabs
+    document.querySelectorAll(".os-pill-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            document.querySelectorAll(".os-pill-btn").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            const cat = btn.getAttribute("data-os-cat");
+            window.activeOsCategory = cat;
+
+            const cards = document.querySelectorAll(".os-card");
+            cards.forEach(c => {
+                const cCat = c.getAttribute("data-os-cat");
+                if (cat === "all" || cCat === cat || (cat === "custom" && c.getAttribute("data-os-family") === "custom")) {
+                    c.style.display = "flex";
+                } else {
+                    c.style.display = "none";
+                }
+            });
+
+            if (cat === "custom") {
+                window.selectOsFamily("custom");
+            }
+        });
+    });
+
+    // 2. OS Cards click
+    document.querySelectorAll(".os-card").forEach(card => {
+        card.addEventListener("click", () => {
+            const fam = card.getAttribute("data-os-family");
+            if (fam) window.selectOsFamily(fam);
+        });
+    });
+
+    // 3. Mode Toggle (Raw vs Simple)
+    const toggleBtn = document.getElementById("osModeToggleBtn");
+    const rawDropdownSection = document.getElementById("rawImageDropdownSection");
+    const toggleText = document.getElementById("osModeToggleText");
+    if (toggleBtn && rawDropdownSection) {
+        toggleBtn.addEventListener("click", () => {
+            const isHidden = rawDropdownSection.style.display === "none";
+            rawDropdownSection.style.display = isHidden ? "block" : "none";
+            const isEn = (typeof window.getCurrentLang === 'function' ? window.getCurrentLang() : 'vi') === 'en';
+            if (toggleText) {
+                toggleText.textContent = isHidden 
+                    ? (isEn ? "Collapse (Quick OS selection)" : "Thu gọn (Chọn nhanh OS)")
+                    : (isEn ? "Select raw file from Storage (Advanced)" : "Chọn file từ Storage (Nâng cao)");
+            }
+        });
+    }
+
+    // 4. Raw Image search filter
+    const searchInput = document.getElementById("rawImageSearchInput");
+    const imageSelect = document.getElementById("diskImageId");
+    if (searchInput && imageSelect) {
+        searchInput.addEventListener("input", (e) => {
+            const q = e.target.value.toLowerCase().trim();
+            Array.from(imageSelect.options).forEach(opt => {
+                if (!q || opt.textContent.toLowerCase().includes(q) || opt.value.toLowerCase().includes(q)) {
+                    opt.style.display = "";
+                } else {
+                    opt.style.display = "none";
+                }
+            });
+        });
+    }
+
+    // 5. Image select change
+    if (imageSelect) {
+        imageSelect.addEventListener("change", () => {
+            const val = imageSelect.value;
+            const matchedBadge = document.getElementById("osMatchedBadge");
+            if (matchedBadge) matchedBadge.textContent = val;
+        });
     }
 };
 
@@ -754,6 +1023,10 @@ window.initWizard = function() {
                 vlanTagVal.style.borderColor = "rgba(79, 70, 229, 0.2)";
             }
         });
+    }
+
+    if (typeof window.initOsSelector === "function") {
+        window.initOsSelector();
     }
 
     document.querySelectorAll("#createVmForm input, #createVmForm select").forEach(el => {

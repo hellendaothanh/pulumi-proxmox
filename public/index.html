@@ -322,15 +322,143 @@
                                 </div>
 
                                 <!-- OS Image Selector -->
-                                <div class="form-group" style="margin-bottom: 8px;">
-                                    <label for="diskImageId">
-                                        <i data-lucide="disc" class="field-icon"></i>
-                                        <span data-i18n="wizard.step2.os_image">Image Hệ Điều Hành (Cloud-Init / ISO)</span>
-                                        <span class="required-star">*</span>
-                                    </label>
-                                    <select id="diskImageId" name="diskImageId" required>
-                                        <option value="" disabled selected data-i18n="wizard.step2.choose_node_first">Chọn Node trước...</option>
-                                    </select>
+                                <div class="form-group os-selection-section" style="margin-bottom: 12px;">
+                                    <div class="label-with-value" style="margin-bottom: 8px;">
+                                        <label>
+                                            <i data-lucide="disc" class="field-icon"></i>
+                                            <span data-i18n="wizard.step2.os_image">Image Hệ Điều Hành (Cloud-Init / ISO)</span>
+                                            <span class="required-star">*</span>
+                                        </label>
+                                        <span class="os-mode-toggle" id="osModeToggleBtn" title="Chuyển đổi giữa Chọn nhanh OS và Danh sách file chi tiết">
+                                            <i data-lucide="sliders-horizontal" style="width:12px;height:12px;"></i>
+                                            <span id="osModeToggleText" data-i18n="wizard.os.advanced_toggle">Chọn file từ Storage (Nâng cao)</span>
+                                        </span>
+                                    </div>
+
+                                    <!-- Category Filter Tabs -->
+                                    <div class="os-filter-pills" id="osFilterPills">
+                                        <button type="button" class="os-pill-btn active" data-os-cat="all" data-i18n="wizard.os.tab_all">⭐ Tất Cả OS Phổ Biến</button>
+                                        <button type="button" class="os-pill-btn" data-os-cat="linux-cloud" data-i18n="wizard.os.tab_linux">🐧 Linux (Cloud-Init)</button>
+                                        <button type="button" class="os-pill-btn" data-os-cat="windows" data-i18n="wizard.os.tab_windows">🪟 Windows Server / Desktop</button>
+                                        <button type="button" class="os-pill-btn" data-os-cat="custom" data-i18n="wizard.os.tab_custom">📁 Chọn File ISO / Img Thủ Công</button>
+                                    </div>
+
+                                    <!-- Quick OS Cards Grid -->
+                                    <div class="os-cards-grid" id="osCardsGrid">
+                                        <!-- Ubuntu Card -->
+                                        <div class="os-card active" data-os-family="ubuntu" data-os-cat="linux-cloud">
+                                            <div class="os-card-header">
+                                                <div class="os-card-icon ubuntu-bg">
+                                                    <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><circle cx="12" cy="12" r="10" fill="#E95420"/><circle cx="12" cy="12" r="5" fill="#fff"/><circle cx="12" cy="12" r="3.2" fill="#E95420"/></svg>
+                                                </div>
+                                                <div class="os-card-info">
+                                                    <div class="os-card-name">Ubuntu Linux</div>
+                                                    <div class="os-card-tag">Cloud-Init / Server</div>
+                                                </div>
+                                            </div>
+                                            <div class="os-card-version" id="ubuntuVersionBadge">24.04 / 22.04 LTS</div>
+                                        </div>
+
+                                        <!-- Debian Card -->
+                                        <div class="os-card" data-os-family="debian" data-os-cat="linux-cloud">
+                                            <div class="os-card-header">
+                                                <div class="os-card-icon debian-bg">
+                                                    <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><circle cx="12" cy="12" r="10" fill="#D70A53"/><path d="M12 5a7 7 0 0 0-7 7c0 3.86 3.14 7 7 7s7-3.14 7-7a7 7 0 0 0-7-7zm0 2.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9z" fill="#fff"/></svg>
+                                                </div>
+                                                <div class="os-card-info">
+                                                    <div class="os-card-name">Debian GNU/Linux</div>
+                                                    <div class="os-card-tag">Cloud-Init / Stable</div>
+                                                </div>
+                                            </div>
+                                            <div class="os-card-version" id="debianVersionBadge">Debian 12 Bookworm</div>
+                                        </div>
+
+                                        <!-- Rocky Linux / RHEL Card -->
+                                        <div class="os-card" data-os-family="rocky" data-os-cat="linux-cloud">
+                                            <div class="os-card-header">
+                                                <div class="os-card-icon rocky-bg">
+                                                    <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><circle cx="12" cy="12" r="10" fill="#10B981"/><path d="M7 16l4-8 4 8h-3l-1-2h-1l-1 2H7z" fill="#fff"/></svg>
+                                                </div>
+                                                <div class="os-card-info">
+                                                    <div class="os-card-name">Rocky / Enterprise Linux</div>
+                                                    <div class="os-card-tag">RHEL Compatible / Rocky 9</div>
+                                                </div>
+                                            </div>
+                                            <div class="os-card-version" id="rockyVersionBadge">Rocky Linux 9 / Alma 9</div>
+                                        </div>
+
+                                        <!-- Alpine Linux Card -->
+                                        <div class="os-card" data-os-family="alpine" data-os-cat="linux-cloud">
+                                            <div class="os-card-header">
+                                                <div class="os-card-icon alpine-bg">
+                                                    <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><circle cx="12" cy="12" r="10" fill="#0D597F"/><path d="M6 16l6-10 6 10H6z" fill="#fff"/></svg>
+                                                </div>
+                                                <div class="os-card-info">
+                                                    <div class="os-card-name">Alpine Linux</div>
+                                                    <div class="os-card-tag">Ultra-Lightweight / Micro</div>
+                                                </div>
+                                            </div>
+                                            <div class="os-card-version" id="alpineVersionBadge">Alpine 3.20 / 3.19</div>
+                                        </div>
+
+                                        <!-- Windows Server Card -->
+                                        <div class="os-card" data-os-family="windows" data-os-cat="windows">
+                                            <div class="os-card-header">
+                                                <div class="os-card-icon windows-bg">
+                                                    <svg viewBox="0 0 24 24" width="22" height="22" fill="#00A4EF"><path d="M3 5.5L10.5 4.5V11.5H3V5.5ZM3 12.5H10.5V19.5L3 18.5V12.5ZM11.5 4.3L21 3V11.5H11.5V4.3ZM11.5 12.5H21V21L11.5 19.7V12.5Z"/></svg>
+                                                </div>
+                                                <div class="os-card-info">
+                                                    <div class="os-card-name">Windows Server / Client</div>
+                                                    <div class="os-card-tag">2022 / 2019 / Win 11</div>
+                                                </div>
+                                            </div>
+                                            <div class="os-card-version" id="windowsVersionBadge">Windows Server 2022 / 2019</div>
+                                        </div>
+
+                                        <!-- Custom / Other ISO Card -->
+                                        <div class="os-card" data-os-family="custom" data-os-cat="custom">
+                                            <div class="os-card-header">
+                                                <div class="os-card-icon custom-bg">
+                                                    <i data-lucide="folder-open" style="width:18px;height:18px;color:#f59e0b;"></i>
+                                                </div>
+                                                <div class="os-card-info">
+                                                    <div class="os-card-name" data-i18n="wizard.os.custom_title">File ISO / Img Tùy Chỉnh</div>
+                                                    <div class="os-card-tag" data-i18n="wizard.os.custom_tag">Chọn file bất kỳ từ Storage</div>
+                                                </div>
+                                            </div>
+                                            <div class="os-card-version" data-i18n="wizard.os.custom_sub">Tất cả định dạng ISO/QCOW2</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Active Matched File Status Banner -->
+                                    <div class="os-matched-status" id="osMatchedStatus">
+                                        <div class="os-matched-left">
+                                            <i data-lucide="check-circle" class="matched-icon text-success"></i>
+                                            <div>
+                                                <div class="matched-title">
+                                                    <span id="osMatchedTitle">Ubuntu Linux Cloud-Init</span>
+                                                    <span class="matched-badge" id="osMatchedBadge">local:iso/ubuntu-22.04-cloud.img</span>
+                                                </div>
+                                                <div class="matched-desc" id="osMatchedDesc">Tự động phát hiện image Cloud-Init chuẩn trên Proxmox Storage.</div>
+                                            </div>
+                                        </div>
+                                        <div class="os-matched-right" id="osVersionSelectorWrapper" style="display:none;">
+                                            <select id="osFamilySubSelect" class="os-sub-select">
+                                                <!-- Populated if multiple images match this OS family -->
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <!-- Raw Detailed Dropdown (Collapsible or Manual Mode) -->
+                                    <div id="rawImageDropdownSection" class="raw-image-dropdown-wrapper" style="display:none; margin-top:8px;">
+                                        <div class="raw-select-header">
+                                            <span class="text-muted" style="font-size:12px;" data-i18n="wizard.os.raw_desc">Hoặc chọn trực tiếp tên file từ Storage Pool:</span>
+                                            <input type="text" id="rawImageSearchInput" class="raw-image-search" data-i18n-placeholder="wizard.os.search_placeholder" placeholder="🔍 Lọc nhanh tên file..." style="padding: 4px 8px; font-size:11.5px; width:180px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(30,41,59,0.8); color:#fff;">
+                                        </div>
+                                        <select id="diskImageId" name="diskImageId" required style="margin-top:4px;">
+                                            <option value="" disabled selected data-i18n="wizard.step2.choose_node_first">Chọn Node trước...</option>
+                                        </select>
+                                    </div>
                                 </div>
 
                                 <div class="step-nav-actions flex-between">
@@ -1552,20 +1680,20 @@
         <i data-lucide="chevron-up" class="btn-icon"></i>
     </button>
 
-    <script src="i18n.js?v=20260820-26"></script>
-    <script src="js/utils.js?v=20260820-26"></script>
-    <script src="js/state.js?v=20260820-26"></script>
-    <script src="js/auth.js?v=20260820-26"></script>
-    <script src="js/console.js?v=20260820-26"></script>
-    <script src="js/alerts.js?v=20260820-26"></script>
-    <script src="js/cluster.js?v=20260820-26"></script>
-    <script src="js/snapshots.js?v=20260820-26"></script>
-    <script src="js/firewall.js?v=20260820-26"></script>
-    <script src="js/hardware.js?v=20260820-26"></script>
-    <script src="js/wizard.js?v=20260820-26"></script>
-    <script src="js/vms.js?v=20260820-26"></script>
-    <script src="js/approvals.js?v=20260820-26"></script>
-    <script src="js/audit.js?v=20260820-26"></script>
-    <script src="js/main.js?v=20260820-26"></script>
+    <script src="i18n.js?v=20260820-27"></script>
+    <script src="js/utils.js?v=20260820-27"></script>
+    <script src="js/state.js?v=20260820-27"></script>
+    <script src="js/auth.js?v=20260820-27"></script>
+    <script src="js/console.js?v=20260820-27"></script>
+    <script src="js/alerts.js?v=20260820-27"></script>
+    <script src="js/cluster.js?v=20260820-27"></script>
+    <script src="js/snapshots.js?v=20260820-27"></script>
+    <script src="js/firewall.js?v=20260820-27"></script>
+    <script src="js/hardware.js?v=20260820-27"></script>
+    <script src="js/wizard.js?v=20260820-27"></script>
+    <script src="js/vms.js?v=20260820-27"></script>
+    <script src="js/approvals.js?v=20260820-27"></script>
+    <script src="js/audit.js?v=20260820-27"></script>
+    <script src="js/main.js?v=20260820-27"></script>
 </body>
 </html>

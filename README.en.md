@@ -107,7 +107,26 @@ graph TD
 
 ---
 
-### 8. 🧙‍♂️ Multi-Step VM Creation Wizard
+### 8. 🧙‍♂️ Multi-Step VM Creation Wizard & Visual OS Selector
+* **Visual OS Distro Presets & Quick Selection**:
+  * 🐧 **Ubuntu Linux**: Ubuntu Server LTS (24.04 / 22.04 LTS) Cloud-Init / ISO.
+  * 🐧 **Debian GNU/Linux**: Debian 12 Bookworm / 11 Bullseye Cloud-Init / Stable.
+  * 🐧 **Rocky / Enterprise Linux**: Rocky Linux 9 / AlmaLinux 9 / CentOS RHEL-compatible.
+  * 🐧 **Alpine Linux**: Ultra-Lightweight / Micro Cloud-Init.
+  * 🪟 **Windows Server / Desktop**: Windows Server 2022 / 2019 / Windows 11 ISO.
+  * 📁 **Custom Storage Files**: Direct raw ISO/Img file picker from storage pools with real-time fuzzy search.
+* **Smart Storage Image Auto-Detection**:
+  * Scans all Proxmox Storage pools on the selected Node for matching files (`ubuntu*`, `debian*`, `rocky*`, `win*`...).
+  * Auto-selects the optimal version and displays an in-place version dropdown if multiple images are available (e.g., both 22.04 and 24.04).
+* **Standard Image Naming Convention on Proxmox VE (`local:iso/...`)**:
+  | Operating System | Recommended Storage File Name | Image Type |
+  | :--- | :--- | :--- |
+  | **Ubuntu Linux** | `ubuntu-24.04-cloud.img` or `ubuntu-22.04-cloud.img` | Cloud-Init (.img / .qcow2) |
+  | **Debian Linux** | `debian-12-cloud.img` or `debian-11-cloud.img` | Cloud-Init (.img / .qcow2) |
+  | **Rocky / Alma Linux** | `rocky-9-cloud.img` or `almalinux-9-cloud.img` | Cloud-Init (.img / .qcow2) |
+  | **Alpine Linux** | `alpine-3.20-cloud.img` | Cloud-Init (.img / .qcow2) |
+  | **Windows Server** | `Windows_Server_2022.iso` | Installer ISO (.iso) |
+
 * **Proxmox VE Tag Sanitizer**: Automatically cleans and enforces valid tag naming rules (`^[a-z0-9_][a-z0-9_\-\.]*$`), preventing HTTP 400 Parameter Verification errors.
 * **Guided 4-Step Provisioning Flow**:
   * **Step 1**: VM Name, Environment badge (`DEV`, `STAGING`, `PROD`), Batch Count (1-10 VMs), and Target Node / Round-Robin mode.
@@ -134,13 +153,28 @@ pulumi-proxmox/
 │   ├── index.html                # HTML layout, modals, wizard, sub-tabs & i18n hooks
 │   ├── style.css                 # CSS Design System & Responsive layout
 │   ├── i18n.js                   # Bilingual dictionary (vi / en) & Dynamic Localizer
-│   └── app.js                    # Frontend Controller, SSO, Hotplug, Alerts, SSE Stream
+│   └── js/                       # Feature-based Frontend Modules (Modular JavaScript)
+│       ├── main.js               # Entry point, tab routing, dark theme & boot initialization
+│       ├── auth.js               # User authentication, SSO callback, RBAC, change password
+│       ├── wizard.js             # 4-step VM creation form, OS presets, app catalog, validation
+│       ├── vms.js                # Pulumi Stacks table, search filter, safe VM deletion
+│       ├── hardware.js           # Live hardware hotplug (CPU/RAM), online disk resize & attach
+│       ├── firewall.js           # Proxmox VE Firewall rules & security presets
+│       ├── snapshots.js          # Snapshot management (RAM state, rollback, delete)
+│       ├── alerts.js             # Resource threshold alerts, Telegram/Webhook dispatcher
+│       ├── approvals.js          # Approval gateway & Developer quota manager
+│       ├── audit.js              # Audit logs & compliance tracking
+│       ├── console.js            # Live Web noVNC Console modal
+│       ├── cluster.js            # Node & storage cluster overview, graphs & telemetry
+│       ├── state.js              # Centralized application state manager
+│       └── utils.js              # Bytes formatting, HTML escape, clipboard helper
 ├── src/                          # Backend Source Code & Pulumi IaC
 │   ├── server.ts                 # Express Server, REST APIs, RBAC Guard & Pulumi Runner
 │   ├── auth-service.ts           # Centralized SSO Service (Google, GitHub, Keycloak OIDC, Local)
 │   ├── alert-service.ts          # Cluster Resource Alert Engine (Telegram, Webhook, Thresholds)
 │   ├── proxmox-api.ts            # Proxmox VE REST Client (QEMU, LXC, Hotplug, Resize, Disks, Firewall)
-│   └── pulumi-program.ts         # Pulumi IaC Resource Definitions, Tag Sanitizer & Cloud-Init
+│   ├── pulumi-program.ts         # Pulumi IaC Resource Definitions, Tag Sanitizer & Cloud-Init
+│   └── types/                    # TypeScript interfaces & type definitions
 ├── .env.example                  # Environment variables template
 ├── package.json                  # Dependencies & NPM Scripts
 ├── Pulumi.yaml                   # Pulumi project definition
@@ -160,7 +194,7 @@ pulumi-proxmox/
 
 ---
 
-## 🚀 Installation & Deployment
+## 🚀 Installation & Deployment Guide
 
 ### Step 1: Install Dependencies
 
@@ -172,13 +206,13 @@ pnpm install
 
 ### Step 2: Configure Environment Variables (`.env`)
 
-Create your `.env` file from `.env.example`:
+Create `.env` from the provided `.env.example`:
 
 ```bash
 cp .env.example .env
 ```
 
-Configure your Proxmox cluster and SSO settings:
+Edit `.env` with your Proxmox cluster credentials and SSO settings:
 
 ```env
 # ==========================================
@@ -211,22 +245,32 @@ AUTH_VIEWER_PASSWORD="view123"
 # ==========================================
 # (OPTIONAL) SINGLE SIGN-ON (SSO)
 # ==========================================
-# Google Workspace OAuth2
-AUTH_GOOGLE_ENABLED="false"
-AUTH_GOOGLE_CLIENT_ID=""
-AUTH_GOOGLE_CLIENT_SECRET=""
-GOOGLE_ALLOWED_DOMAINS="company.com"
+# 1. OpenID Connect (Keycloak / Authelia / Okta / Authentik)
+OIDC_ENABLED="false"
+OIDC_NAME="Keycloak SSO"
+OIDC_ISSUER_URL="https://auth.yourdomain.com/realms/master"
+OIDC_CLIENT_ID="proxmox-portal"
+OIDC_CLIENT_SECRET="your_oidc_client_secret"
+OIDC_SCOPES="openid profile email"
+OIDC_GROUP_CLAIM="groups"
+OIDC_ADMIN_GROUPS="proxmox-admins,devops-leads"
+OIDC_DEV_GROUPS="developers,devsecops"
 
-# GitHub OAuth
-AUTH_GITHUB_ENABLED="false"
-AUTH_GITHUB_CLIENT_ID=""
-AUTH_GITHUB_CLIENT_SECRET=""
+# 2. Google Workspace OAuth2
+GOOGLE_OAUTH_ENABLED="false"
+GOOGLE_CLIENT_ID="your_client_id.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="your_google_client_secret"
+GOOGLE_ALLOWED_DOMAINS="yourcompany.com"
+GOOGLE_ADMIN_EMAILS="admin@yourcompany.com"
+GOOGLE_DEV_EMAILS="dev@yourcompany.com"
 
-# Generic OIDC (Keycloak / Okta / Authelia)
-AUTH_OIDC_ENABLED="false"
-AUTH_OIDC_ISSUER_URL=""
-AUTH_OIDC_CLIENT_ID=""
-AUTH_OIDC_CLIENT_SECRET=""
+# 3. GitHub OAuth
+GITHUB_OAUTH_ENABLED="false"
+GITHUB_CLIENT_ID="your_github_client_id"
+GITHUB_CLIENT_SECRET="your_github_client_secret"
+GITHUB_ALLOWED_ORGS="your-org"
+GITHUB_ADMIN_TEAMS="devops"
+GITHUB_DEV_TEAMS="developers"
 
 # ==========================================
 # (OPTIONAL) ALERT NOTIFICATIONS

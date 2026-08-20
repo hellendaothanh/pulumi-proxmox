@@ -1,0 +1,44 @@
+[
+  {
+    "id": "storage_node06_zfs-storage",
+    "type": "STORAGE_HIGH",
+    "severity": "WARNING",
+    "title": "💾 Storage Pool 'zfs-storage' (node06) exceeds threshold (88.6%)",
+    "message": "Storage pool 'zfs-storage' on node 'node06' is at 88.6%, exceeding threshold of 85%. Recommended to clean up old snapshots or expand LUN/ZFS storage!",
+    "node": "node06",
+    "resourceName": "zfs-storage (zfspool)",
+    "currentValue": 88.6,
+    "thresholdValue": 85,
+    "unit": "%",
+    "timestamp": "2026-08-20T06:37:47.057Z",
+    "status": "ACTIVE"
+  },
+  {
+    "id": "storage_node06_zfs-storage",
+    "type": "STORAGE_HIGH",
+    "severity": "WARNING",
+    "title": "💾 Storage Pool 'zfs-storage' (node06) exceeds threshold (88.6%)",
+    "message": "Storage pool 'zfs-storage' on node 'node06' is at 88.6%, exceeding threshold of 85%. Recommended to clean up old snapshots or expand LUN/ZFS storage!",
+    "node": "node06",
+    "resourceName": "zfs-storage (zfspool)",
+    "currentValue": 88.6,
+    "thresholdValue": 85,
+    "unit": "%",
+    "timestamp": "2026-08-20T06:36:30.049Z",
+    "status": "ACTIVE"
+  },
+  {
+    "id": "storage_node06_zfs-storage",
+    "type": "STORAGE_HIGH",
+    "severity": "WARNING",
+    "title": "💾 Storage Pool 'zfs-storage' (node06) exceeds threshold (88.6%)",
+    "message": "Storage pool 'zfs-storage' on node 'node06' is at 88.6%, exceeding threshold of 85%. Recommended to clean up old snapshots or expand LUN/ZFS storage!",
+    "node": "node06",
+    "resourceName": "zfs-storage (zfspool)",
+    "currentValue": 88.6,
+    "thresholdValue": 85,
+    "unit": "%",
+    "timestamp": "2026-08-20T06:35:27.895Z",
+    "status": "ACTIVE"
+  }
+]

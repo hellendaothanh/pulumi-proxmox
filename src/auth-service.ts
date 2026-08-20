@@ -118,7 +118,7 @@ class AuthService {
             oidcIssuerUrl: (process.env.OIDC_ISSUER_URL || "").replace(/\/+$/, ""),
             oidcClientId: process.env.OIDC_CLIENT_ID || "",
             oidcClientSecret: process.env.OIDC_CLIENT_SECRET || "",
-            oidcScopes: process.env.OIDC_SCOPES || "openid profile email groups",
+            oidcScopes: process.env.OIDC_SCOPES || "openid profile email",
             oidcGroupClaim: process.env.OIDC_GROUP_CLAIM || "groups",
             oidcAdminGroups: parseList(process.env.OIDC_ADMIN_GROUPS),
             oidcDevGroups: parseList(process.env.OIDC_DEV_GROUPS),

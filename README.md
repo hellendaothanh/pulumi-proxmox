@@ -107,7 +107,26 @@ graph TD
 
 ---
 
-### 8. 🧙‍♂️ Trình Tạo Máy Ảo 4 Bước (Multi-Step Creation Wizard)
+### 8. 🧙‍♂️ Trình Tạo Máy Ảo 4 Bước (Multi-Step Creation Wizard) & Chọn Nhanh Hệ Điều Hành
+* **Bộ chọn Nhanh Hệ Điều Hành Trực quan (Visual OS Distro Presets)**:
+  * 🐧 **Ubuntu Linux**: Ubuntu Server LTS (24.04 / 22.04 LTS) Cloud-Init / ISO.
+  * 🐧 **Debian GNU/Linux**: Debian 12 Bookworm / 11 Bullseye Cloud-Init / Stable.
+  * 🐧 **Rocky / Enterprise Linux**: Rocky Linux 9 / AlmaLinux 9 / CentOS RHEL-compatible.
+  * 🐧 **Alpine Linux**: Ultra-Lightweight / Micro Cloud-Init.
+  * 🪟 **Windows Server / Desktop**: Windows Server 2022 / 2019 / Windows 11 ISO.
+  * 📁 **Custom Storage Files**: Chế độ chọn file ISO/Img thô trực tiếp từ Storage kèm ô lọc tìm kiếm thời gian thực.
+* **Cơ chế Tự Động Quét & Dò Tìm File Chuẩn (Smart Image Auto-Detection)**:
+  * Tự động quét toàn bộ Proxmox Storage trên Node được chọn để tìm file khớp theo từ khóa (`ubuntu*`, `debian*`, `rocky*`, `win*`...).
+  * Tự động điền đường dẫn tối ưu và hiển thị dropdown chọn phiên bản nếu có nhiều bản (ví dụ có cả 22.04 và 24.04).
+* **Chuẩn đặt tên file Image trên Proxmox VE (`local:iso/...`)**:
+  | Hệ Điều Hành | Tên file khuyến nghị trên Proxmox | Loại Image |
+  | :--- | :--- | :--- |
+  | **Ubuntu Linux** | `ubuntu-24.04-cloud.img` hoặc `ubuntu-22.04-cloud.img` | Cloud-Init (.img / .qcow2) |
+  | **Debian Linux** | `debian-12-cloud.img` hoặc `debian-11-cloud.img` | Cloud-Init (.img / .qcow2) |
+  | **Rocky / Alma Linux** | `rocky-9-cloud.img` hoặc `almalinux-9-cloud.img` | Cloud-Init (.img / .qcow2) |
+  | **Alpine Linux** | `alpine-3.20-cloud.img` | Cloud-Init (.img / .qcow2) |
+  | **Windows Server** | `Windows_Server_2022.iso` | Installer ISO (.iso) |
+
 * **Bộ lọc Tag Chuẩn Hóa (Proxmox VE Tag Sanitizer)**: Tự động chuẩn hóa định dạng tag (`^[a-z0-9_][a-z0-9_\-\.]*$`), loại bỏ hoàn toàn lỗi HTTP 400 Parameter Verification khi khởi tạo VM.
 * **Quy trình Khởi tạo Trực quan**:
   * **Bước 1**: Đặt tên VM, chọn môi trường (`DEV`, `STAGING`, `PROD`), cấu hình số lượng (Batch 1-10 VMs) và chọn Node đích/Round-Robin.
@@ -135,13 +154,28 @@ pulumi-proxmox/
 │   ├── index.html                # Cấu trúc HTML, Modals, Wizard, Sub-tabs & i18n hooks
 │   ├── style.css                 # Hệ thống CSS Design System & Responsive Layout
 │   ├── i18n.js                   # Từ điển đa ngôn ngữ (vi / en) & Dynamic Localizer
-│   └── app.js                    # Frontend Controller, SSO, Hotplug, Alerts, SSE Stream
+│   └── js/                       # Module Frontend theo tính năng (Modular JavaScript)
+│       ├── main.js               # Entry point, tab routing, dark theme & boot initialization
+│       ├── auth.js               # Xác thực người dùng, SSO callback, RBAC, đổi mật khẩu
+│       ├── wizard.js             # Form tạo VM 4 bước, OS presets, app catalog, validation
+│       ├── vms.js                # Bảng Stacks Pulumi, lọc tìm kiếm, xóa VM an toàn
+│       ├── hardware.js           # Live hardware hotplug (CPU/RAM), online disk resize & attach
+│       ├── firewall.js           # Proxmox VE Firewall rules & security presets
+│       ├── snapshots.js          # Quản trị Snapshot (tạo kèm RAM, khôi phục, xóa)
+│       ├── alerts.js             # Cảnh báo ngưỡng tài nguyên, cấu hình Telegram/Webhook
+│       ├── approvals.js          # Cổng phê duyệt & Quota manager dành cho Developer
+│       ├── audit.js              # Nhật ký kiểm toán (Audit Logs) & Compliance tracking
+│       ├── console.js            # Live Web noVNC Console modal
+│       ├── cluster.js            # Tổng quan cụm Node/Storage, đồ thị và telemetry
+│       ├── state.js              # Quản lý State tập trung toàn ứng dụng
+│       └── utils.js              # Định dạng bytes, escape HTML, copy to clipboard
 ├── src/                          # Mã nguồn Backend & Pulumi IaC
 │   ├── server.ts                 # Express Server, REST APIs, RBAC Guard & Pulumi Runner
 │   ├── auth-service.ts           # Centralized SSO Service (Google, GitHub, Keycloak OIDC, Local)
 │   ├── alert-service.ts          # Cluster Resource Alert Engine (Telegram, Webhook, Thresholds)
 │   ├── proxmox-api.ts            # Proxmox VE REST Client (QEMU, LXC, Hotplug, Resize, Disks, Firewall)
-│   └── pulumi-program.ts         # Khai báo tài nguyên Pulumi IaC, Tag Sanitizer & Cloud-Init
+│   ├── pulumi-program.ts         # Khai báo tài nguyên Pulumi IaC, Tag Sanitizer & Cloud-Init
+│   └── types/                    # TypeScript interfaces & type definitions
 ├── .env.example                  # Mẫu cấu hình biến môi trường chi tiết
 ├── package.json                  # Dependencies & NPM Scripts
 ├── Pulumi.yaml                   # Khai báo dự án Pulumi
@@ -212,22 +246,32 @@ AUTH_VIEWER_PASSWORD="view123"
 # ==========================================
 # (OPTIONAL) SINGLE SIGN-ON (SSO)
 # ==========================================
-# Google Workspace OAuth2
-AUTH_GOOGLE_ENABLED="false"
-AUTH_GOOGLE_CLIENT_ID=""
-AUTH_GOOGLE_CLIENT_SECRET=""
-GOOGLE_ALLOWED_DOMAINS="company.com"
+# 1. OpenID Connect (Keycloak / Authelia / Okta / Authentik)
+OIDC_ENABLED="false"
+OIDC_NAME="Keycloak SSO"
+OIDC_ISSUER_URL="https://auth.yourdomain.com/realms/master"
+OIDC_CLIENT_ID="proxmox-portal"
+OIDC_CLIENT_SECRET="your_oidc_client_secret"
+OIDC_SCOPES="openid profile email"
+OIDC_GROUP_CLAIM="groups"
+OIDC_ADMIN_GROUPS="proxmox-admins,devops-leads"
+OIDC_DEV_GROUPS="developers,devsecops"
 
-# GitHub OAuth
-AUTH_GITHUB_ENABLED="false"
-AUTH_GITHUB_CLIENT_ID=""
-AUTH_GITHUB_CLIENT_SECRET=""
+# 2. Google Workspace OAuth2
+GOOGLE_OAUTH_ENABLED="false"
+GOOGLE_CLIENT_ID="your_client_id.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="your_google_client_secret"
+GOOGLE_ALLOWED_DOMAINS="yourcompany.com"
+GOOGLE_ADMIN_EMAILS="admin@yourcompany.com"
+GOOGLE_DEV_EMAILS="dev@yourcompany.com"
 
-# Generic OIDC (Keycloak / Okta / Authelia)
-AUTH_OIDC_ENABLED="false"
-AUTH_OIDC_ISSUER_URL=""
-AUTH_OIDC_CLIENT_ID=""
-AUTH_OIDC_CLIENT_SECRET=""
+# 3. GitHub OAuth
+GITHUB_OAUTH_ENABLED="false"
+GITHUB_CLIENT_ID="your_github_client_id"
+GITHUB_CLIENT_SECRET="your_github_client_secret"
+GITHUB_ALLOWED_ORGS="your-org"
+GITHUB_ADMIN_TEAMS="devops"
+GITHUB_DEV_TEAMS="developers"
 
 # ==========================================
 # (OPTIONAL) ALERT NOTIFICATIONS
